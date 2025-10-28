@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
-import { useRecord } from './src/hooks/useRecord.js';
-import { checkPronunciation } from './src/utils.js';
+import { usePronunciationScoring } from './src/hooks/usePronunciationScoring.js';
 
 // Asset imports
 import userDefault from './src/assets/user/default.png';
@@ -18,8 +17,8 @@ import monsterSpellFire from './src/assets/monster/monster-spell-fire.png';
 
 // Constants
 const AUDIO_TIME_OFFSET = 0.1;
-const ENEMY_ATTACK_TIME = 10;
-const MAX_PLAYER_HP = 6; // Changed to 6 as per Vietnamese specs
+const ROUND_TIME = 10; // 10 seconds per round
+const MAX_PLAYER_HP = 6;
 const MAX_ENEMY_HP = 6;
 
 const WORD_LIST = [
@@ -46,10 +45,17 @@ const GAME_STATES = {
     GAMEOVER: 'gameover'
 };
 
+// Round states
+const ROUND_STATES = {
+    WAITING: 'waiting',      // Waiting for user to start speaking
+    LISTENING: 'listening',  // VAD is listening for speech
+    PROCESSING: 'processing', // Processing audio and scoring
+    FINISHED: 'finished'     // Round finished, showing results
+};
+
 // Sound effects using Tone.js
 const createSounds = () => {
     const synth = new Tone.Synth().toDestination();
-
     return {
         pop: () => synth.triggerAttackRelease("C4", "8n", Tone.now() + AUDIO_TIME_OFFSET),
         damage: () => synth.triggerAttackRelease("G2", "4n", Tone.now() + AUDIO_TIME_OFFSET),
@@ -69,106 +75,23 @@ const createSounds = () => {
 };
 
 // Utility functions
-const getLevelDifficulty = (floor) => Math.floor(floor / 10) + 1;
 const getEnemyMaxHP = (floor) => Math.min(MAX_ENEMY_HP, 3 + Math.floor(floor / 5));
 const getWordDifficulty = (floor) => Math.min(10, Math.floor(floor / 2) + 1);
 
-// Flying Spell Projectile Component
-const FlyingSpell = ({ flyingSpell, playerRef, enemyRef }) => {
-    if (!flyingSpell || !flyingSpell.active) return null;
-
-    const isPlayerSpell = flyingSpell.type === 'player';
-    const spellImage = isPlayerSpell ? userSpellFire : monsterSpellFire;
-
-    // Get actual positions of characters
-    const getCharacterPosition = (ref) => {
-        if (!ref?.current) return { left: 0, top: 0 };
-        const rect = ref.current.getBoundingClientRect();
-        return {
-            left: rect.left + rect.width / 2,
-            top: rect.top + rect.height / 2
-        };
-    };
-
-    const playerPos = getCharacterPosition(playerRef);
-    const enemyPos = getCharacterPosition(enemyRef);
-
-    // Calculate start and end positions
-    const startPos = isPlayerSpell ? playerPos : enemyPos;
-    const endPos = isPlayerSpell ? enemyPos : playerPos;
-
-    // Calculate distance and angle
-    const deltaX = endPos.left - startPos.left;
-    const deltaY = endPos.top - startPos.top;
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
-
-    // Dynamic CSS variables for animation
-    const style = {
-        '--start-x': `${startPos.left}px`,
-        '--start-y': `${startPos.top}px`,
-        '--end-x': `${endPos.left}px`,
-        '--end-y': `${endPos.top}px`,
-        '--distance': `${distance}px`,
-        left: startPos.left,
-        top: startPos.top,
-        transform: 'translate(-50%, -50%)'
-    };
-
-    const animationClass = isPlayerSpell
-        ? 'animate-[flyToTarget_1s_linear_forwards]'
-        : 'animate-[flyToTarget_1s_linear_forwards]';
-
-    return (
-        <div
-            className={`fixed z-20 w-24 h-24 ${animationClass}`}
-            style={style}
-        >
-            <img
-                src={spellImage}
-                alt="Flying Spell"
-                className="w-full h-full object-contain"
-            />
-        </div>
-    );
-};
-
-// Spell Effect Component (for casting animation)
-const SpellEffect = ({ show, spellImage, className = "w-24 h-24" }) => {
-    if (!show) return null;
-
-    return (
-        <div className={`${className} absolute animate-pulse`}>
-            <img
-                src={spellImage}
-                alt="Spell Effect"
-                className="w-full h-full object-contain opacity-60"
-            />
-        </div>
-    );
-};
-
-// Character Components with State-based Assets
+// Character Components
 const PlayerCharacter = React.forwardRef(({ state, className = "w-32 h-32" }, ref) => {
     const getPlayerAsset = () => {
         switch (state) {
-            case 'attack':
-                return userAttack;
-            case 'hurt':
-                return userHurt;
-            case 'dead':
-                return userDead;
-            default:
-                return userDefault;
+            case 'attack': return userAttack;
+            case 'hurt': return userHurt;
+            case 'dead': return userDead;
+            default: return userDefault;
         }
     };
 
     return (
         <div ref={ref} className={`${className} flex items-center justify-center`}>
-            <img
-                src={getPlayerAsset()}
-                alt={`Player ${state}`}
-                className="w-full h-full object-contain"
-            />
+            <img src={getPlayerAsset()} alt={`Player ${state}`} className="w-full h-full object-contain" />
         </div>
     );
 });
@@ -176,24 +99,16 @@ const PlayerCharacter = React.forwardRef(({ state, className = "w-32 h-32" }, re
 const EnemyCharacter = React.forwardRef(({ state, className = "w-32 h-32" }, ref) => {
     const getEnemyAsset = () => {
         switch (state) {
-            case 'attack':
-                return monsterAttack;
-            case 'hurt':
-                return monsterHurt;
-            case 'dead':
-                return monsterDead;
-            default:
-                return monsterDefault;
+            case 'attack': return monsterAttack;
+            case 'hurt': return monsterHurt;
+            case 'dead': return monsterDead;
+            default: return monsterDefault;
         }
     };
 
     return (
         <div ref={ref} className={`${className} flex items-center justify-center`}>
-            <img
-                src={getEnemyAsset()}
-                alt={`Enemy ${state}`}
-                className="w-full h-full object-contain"
-            />
+            <img src={getEnemyAsset()} alt={`Enemy ${state}`} className="w-full h-full object-contain" />
         </div>
     );
 });
@@ -205,57 +120,40 @@ const HeartIcon = ({ filled, className = "w-8 h-8" }) => (
     </svg>
 );
 
-// Pronunciation Result Display Component
-const PronunciationDisplay = ({ word, pronunciationResult }) => {
-    if (!pronunciationResult || !pronunciationResult.result || !pronunciationResult.result[0]) {
-        // Fallback to normal word display
-        return (
-            <div className="text-5xl font-bold text-yellow-300 font-mono">
-                {word}
-            </div>
-        );
-    }
+// Flying Spell Component
+const FlyingSpell = ({ flyingSpell, playerRef, enemyRef }) => {
+    if (!flyingSpell || !flyingSpell.active) return null;
 
-    const wordResult = pronunciationResult.result[0];
-    const letters = wordResult.letters || [];
+    const isPlayerSpell = flyingSpell.type === 'player';
+    const spellImage = isPlayerSpell ? userSpellFire : monsterSpellFire;
 
-    const getLetterColor = (score) => {
-        if (score >= 0.7) return 'text-green-400';
-        if (score >= 0.5) return 'text-yellow-400';
-        return 'text-red-400';
+    const getCharacterPosition = (ref) => {
+        if (!ref?.current) return { left: 0, top: 0 };
+        const rect = ref.current.getBoundingClientRect();
+        return {
+            left: rect.left + rect.width / 2,
+            top: rect.top + rect.height / 2
+        };
+    };
+
+    const playerPos = getCharacterPosition(playerRef);
+    const enemyPos = getCharacterPosition(enemyRef);
+    const startPos = isPlayerSpell ? playerPos : enemyPos;
+    const endPos = isPlayerSpell ? enemyPos : playerPos;
+
+    const style = {
+        '--start-x': `${startPos.left}px`,
+        '--start-y': `${startPos.top}px`,
+        '--end-x': `${endPos.left}px`,
+        '--end-y': `${endPos.top}px`,
+        left: startPos.left,
+        top: startPos.top,
+        transform: 'translate(-50%, -50%)'
     };
 
     return (
-        <div className="text-5xl font-bold font-mono flex">
-            {letters.map((letterData, index) => (
-                <span
-                    key={index}
-                    className={`${getLetterColor(letterData.score)} transition-colors duration-300`}
-                    title={`Score: ${(letterData.score * 100).toFixed(1)}%`}
-                >
-                    {letterData.letter.toUpperCase()}
-                </span>
-            ))}
-        </div>
-    );
-};
-
-// Score Display Component
-const ScoreDisplay = ({ pronunciationResult }) => {
-    if (!pronunciationResult || pronunciationResult.total_score === undefined) {
-        return null;
-    }
-
-    const totalScore = Math.round(pronunciationResult.total_score * 100);
-    const getScoreColor = () => {
-        if (totalScore >= 70) return 'text-green-400';
-        if (totalScore >= 50) return 'text-yellow-400';
-        return 'text-red-400';
-    };
-
-    return (
-        <div className={`text-2xl font-mono mt-2 ${getScoreColor()}`}>
-            Điểm: {totalScore}%
+        <div className="fixed z-20 w-24 h-24 animate-[flyToTarget_1s_linear_forwards]" style={style}>
+            <img src={spellImage} alt="Flying Spell" className="w-full h-full object-contain" />
         </div>
     );
 };
@@ -268,115 +166,88 @@ function App() {
     const [playerHP, setPlayerHP] = useState(MAX_PLAYER_HP);
     const [enemyHP, setEnemyHP] = useState(3);
     const [currentWord, setCurrentWord] = useState(null);
-    const [timer, setTimer] = useState(ENEMY_ATTACK_TIME);
-    const [hint, setHint] = useState('');
-    const [showHint, setShowHint] = useState(false);
-    const [loadingTTS, setLoadingTTS] = useState(false);
-    const [loadingHint, setLoadingHint] = useState(false);
-    const [splashProgress, setSplashProgress] = useState(0);
-    const [menuFade, setMenuFade] = useState(true);
+
+    // Round management
+    const [roundState, setRoundState] = useState(ROUND_STATES.WAITING);
+    const [timer, setTimer] = useState(ROUND_TIME);
+    const [roundStartTime, setRoundStartTime] = useState(null);
 
     // Character animation states
     const [playerState, setPlayerState] = useState('default');
     const [enemyState, setEnemyState] = useState('default');
+    const [flyingSpell, setFlyingSpell] = useState(null);
 
-    // Removed static spell effect states - only using flying spells now
-
-    // Flying spell projectile states
-    const [flyingSpell, setFlyingSpell] = useState(null); // { type: 'player' | 'enemy', active: true }
-
-    // VAD auto-stop handler using ref to avoid closure issues
-    const vadAutoStopRef = useRef();
-    vadAutoStopRef.current = async (blob) => {
-        console.log('🎯 VAD auto-stopped, processing audio...', {
-            hasBlob: !!blob,
-            blobSize: blob?.size,
-            blobType: blob?.type,
-            currentWord: currentWord?.word,
-            timestamp: new Date().toISOString()
-        });
-        
-        if (blob && blob.size > 0) {
-            console.log('✅ Calling processAudioBlob with valid blob');
-            try {
-                await processAudioBlob(blob);
-            } catch (error) {
-                console.error('❌ Error in processAudioBlob:', error);
-                handleChantResultFallback('');
-            }
-        } else {
-            console.log('❌ No valid blob, using fallback');
-            handleChantResultFallback('');
-        }
-    };
-
-    // Audio recording using useRecord hook with VAD
-    const recordHookResult = useRecord({
-        enableVAD: true, // Enable VAD auto-stop
-        vadConfig: {
-            silenceThreshold: -30,
-            speechThreshold: -18,
-            minSpeechDuration: 500, // Minimum 0.5s speech
-            maxSilenceDuration: 3000, // 3 seconds silence to auto-stop
-            maxRecordingTime: 10000, // Max 10s per recording
-        },
-        enableLogging: true,
-        onAutoStop: (blob) => vadAutoStopRef.current?.(blob)
-    });
-
-    const [isRecording, recordingBlob, startRecording, stopRecording, vadMethods] = recordHookResult;
-    const { isListening, vadError, startListening, stopListening } = vadMethods || {};
-    
-    const [isProcessingAudio, setIsProcessingAudio] = useState(false);
-
-    // Pronunciation result states
+    // Pronunciation results
     const [pronunciationResult, setPronunciationResult] = useState(null);
     const [showPronunciationResult, setShowPronunciationResult] = useState(false);
+    const isProcessingResultRef = useRef(false);
 
-    // Track API requests to prevent race conditions
-    const [activeApiRequest, setActiveApiRequest] = useState(null);
-
-    // Track space key processing to prevent multiple presses
-    const [isProcessingSpace, setIsProcessingSpace] = useState(false);
+    // UI states
+    const [splashProgress, setSplashProgress] = useState(0);
+    const [menuFade, setMenuFade] = useState(true);
 
     // Refs
     const sounds = useRef(null);
     const timerRef = useRef(null);
-    const recognitionRef = useRef(null);
-    const hintTimeoutRef = useRef(null);
     const playerRef = useRef(null);
     const enemyRef = useRef(null);
-    const recordingTimeoutRef = useRef(null);
+    const roundTimeoutRef = useRef(null);
 
-    // Initialize sounds and speech recognition fallback
+    // Pronunciation scoring setup with VAD
+    const pronunciationHook = usePronunciationScoring({
+        mode: 'vad',
+        autoAnalyze: true,
+        textToAnalyze: currentWord?.word || '',
+        vadConfig: {
+            silenceThreshold: -40,
+            speechThreshold: -25,
+            minSpeechDuration: 300,
+            maxSilenceDuration: 2000,
+            maxRecordingTime: 10000,
+        },
+        enableLogging: true,
+        onAnalysisComplete: (result) => {
+            console.log('🎯 VAD auto-analysis completed:', result);
+
+            // Clear the round timeout since we got speech
+            if (roundTimeoutRef.current) {
+                clearTimeout(roundTimeoutRef.current);
+                roundTimeoutRef.current = null;
+                console.log('✅ Cleared round timeout due to VAD detection');
+            }
+
+            // Process result directly - handlePronunciationResult will set the flag
+            handlePronunciationResult(result, 'VAD_AUTO_ANALYSIS');
+        }
+    });
+
+    // Update textToAnalyze when currentWord changes
+    useEffect(() => {
+        if (currentWord?.word && pronunciationHook.config) {
+            pronunciationHook.config.textToAnalyze = currentWord.word;
+            console.log('📝 Updated textToAnalyze to:', currentWord.word);
+        }
+    }, [currentWord?.word]);
+
+    const {
+        isRecording,
+        recordingBlob,
+        isListening,
+        isProcessing,
+        lastResult,
+        error: pronunciationError,
+        startListening,
+        stopListening,
+        processPronunciation,
+        clearBlob
+    } = pronunciationHook;
+
+    // Initialize sounds
     useEffect(() => {
         sounds.current = createSounds();
-
-        // Initialize speech recognition as fallback
-        if ('webkitSpeechRecognition' in window) {
-            recognitionRef.current = new window.webkitSpeechRecognition();
-            recognitionRef.current.continuous = false;
-            recognitionRef.current.interimResults = false;
-            recognitionRef.current.lang = 'en-US';
-
-            recognitionRef.current.onresult = (event) => {
-                const transcript = event.results[0][0].transcript.toUpperCase().trim();
-                handleChantResultFallback(transcript);
-            };
-
-            recognitionRef.current.onerror = () => {
-                handleChantResultFallback('');
-            };
-
-            recognitionRef.current.onend = () => {
-                // Speech recognition ended
-            };
-        }
-
         return () => {
             if (timerRef.current) clearInterval(timerRef.current);
-            if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current);
-            if (recordingTimeoutRef.current) clearTimeout(recordingTimeoutRef.current);
+            if (roundTimeoutRef.current) clearTimeout(roundTimeoutRef.current);
         };
     }, []);
 
@@ -407,20 +278,21 @@ function App() {
         }
     }, [gameState]);
 
-    // Game timer
+    // Timer countdown
     useEffect(() => {
-        if (gameState === GAME_STATES.INGAME && timer > 0) {
+        if (gameState === GAME_STATES.INGAME && roundState === ROUND_STATES.LISTENING && timer > 0) {
             timerRef.current = setTimeout(() => {
                 setTimer(prev => prev - 1);
             }, 1000);
-        } else if (gameState === GAME_STATES.INGAME && timer === 0) {
-            handleTimeout();
+        } else if (gameState === GAME_STATES.INGAME && roundState === ROUND_STATES.LISTENING && timer === 0) {
+            // Time's up - process with no audio
+            handleTimeUp();
         }
 
         return () => {
             if (timerRef.current) clearTimeout(timerRef.current);
         };
-    }, [timer, gameState]);
+    }, [timer, gameState, roundState]);
 
     // Keyboard handler
     useEffect(() => {
@@ -433,104 +305,55 @@ function App() {
 
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [gameState, isRecording, isProcessingAudio]);
+    }, [gameState, roundState]);
 
     const handleSpacePress = async () => {
-        if (isProcessingSpace) {
-            console.log('⚠️ SPACE already being processed, ignoring');
-            return;
-        }
+        sounds.current?.pop();
 
-        setIsProcessingSpace(true);
-
-        try {
-            console.log('⌨️ SPACE pressed', {
-                gameState,
-                isRecording,
-                isProcessingAudio
-            });
-
-            sounds.current?.pop();
-
-            switch (gameState) {
-                case GAME_STATES.MENU:
-                    setGameState(GAME_STATES.TUTORIAL);
-                    break;
-                case GAME_STATES.TUTORIAL:
-                    startGame();
-                    break;
-                case GAME_STATES.INGAME:
-                    if (vadMethods) {
-                        // VAD mode - toggle listening
-                        if (isListening) {
-                            console.log('🛑 SPACE: Stopping VAD listening...');
-                            await stopListening();
-                        } else {
-                            console.log('👂 SPACE: Starting VAD listening...');
-                            await startListening();
-                        }
-                    } else {
-                        // Manual mode - toggle recording
-                        if (isRecording) {
-                            console.log('🛑 SPACE: Stopping recording...');
-                            await stopRecordingManual();
-                        } else if (!isProcessingAudio) {
-                            console.log('▶️ SPACE: Starting recording...');
-                            await startChanting();
-                        } else {
-                            console.log('⚠️ SPACE: Cannot start - processing audio');
-                        }
-                    }
-                    break;
-                case GAME_STATES.GAMEOVER:
-                    resetGame();
-                    break;
-            }
-        } catch (error) {
-            console.error('❌ Error in handleSpacePress:', error);
-        } finally {
-            setIsProcessingSpace(false);
+        switch (gameState) {
+            case GAME_STATES.MENU:
+                setGameState(GAME_STATES.TUTORIAL);
+                break;
+            case GAME_STATES.TUTORIAL:
+                startGame();
+                break;
+            case GAME_STATES.INGAME:
+                if (roundState === ROUND_STATES.WAITING) {
+                    startRound();
+                }
+                break;
+            case GAME_STATES.GAMEOVER:
+                resetGame();
+                break;
         }
     };
 
-    const startGame = async () => {
+    const startGame = () => {
         setGameState(GAME_STATES.INGAME);
         setFloor(1);
         setScore(0);
         setPlayerHP(MAX_PLAYER_HP);
         setEnemyHP(getEnemyMaxHP(1));
         setCurrentWord(getRandomWord(1));
-        setTimer(ENEMY_ATTACK_TIME);
-        // Reset character states
+        setRoundState(ROUND_STATES.WAITING);
+        setTimer(ROUND_TIME);
         setPlayerState('default');
         setEnemyState('default');
         setFlyingSpell(null);
         setPronunciationResult(null);
         setShowPronunciationResult(false);
-        
-        // Auto-start VAD listening when game starts
-        if (vadMethods && startListening) {
-            setTimeout(async () => {
-                await startListening();
-            }, 1000);
-        }
+        isProcessingResultRef.current = false;
     };
 
-    const resetGame = async () => {
-        // Stop VAD listening first
-        if (vadMethods && isListening && stopListening) {
-            await stopListening();
-        }
-        
+    const resetGame = () => {
         setGameState(GAME_STATES.MENU);
         setFloor(1);
         setScore(0);
         setPlayerHP(MAX_PLAYER_HP);
         setEnemyHP(3);
         setCurrentWord(null);
-        setTimer(ENEMY_ATTACK_TIME);
-        setHint('');
-        setShowHint(false);
+        setRoundState(ROUND_STATES.WAITING);
+        setTimer(ROUND_TIME);
     };
 
     const getRandomWord = (floor) => {
@@ -539,395 +362,273 @@ function App() {
         return availableWords[Math.floor(Math.random() * availableWords.length)];
     };
 
-    const startChanting = async () => {
-        console.log('🚀 startChanting called', {
-            isRecording,
-            isProcessingAudio,
-            canStart: !isRecording && !isProcessingAudio
-        });
+    const startRound = async () => {
+        console.log('🚀 Starting new round with word:', currentWord?.word);
 
-        if (!isRecording && !isProcessingAudio) {
-            console.log('🎤 Starting recording with useRecord hook');
-
-            try {
-                await startRecording();
-                console.log('✅ startRecording completed');
-
-                // Auto-stop recording after 5 seconds
-                recordingTimeoutRef.current = setTimeout(async () => {
-                    console.log('⏰ Auto-stop timeout triggered, isRecording:', isRecording);
-                    if (isRecording) {
-                        console.log('⏰ Auto-stopping recording after 5 seconds');
-                        await handleStopRecording();
-                    }
-                }, 5000);
-
-            } catch (error) {
-                console.error('❌ Error starting recording:', error);
-                // Fallback to speech recognition
-                if (recognitionRef.current) {
-                    console.log('🔄 Falling back to speech recognition');
-                    recognitionRef.current.start();
-                }
-            }
-        } else {
-            console.log('⚠️ Cannot start recording', {
-                isRecording,
-                isProcessingAudio,
-                reason: isRecording ? 'Already recording' : 'Processing audio'
-            });
-
-            if (recognitionRef.current && !isRecording) {
-                // Fallback to speech recognition
-                console.log('🔄 Using speech recognition fallback');
-                recognitionRef.current.start();
-            }
+        // Clear any existing timeout first
+        if (roundTimeoutRef.current) {
+            clearTimeout(roundTimeoutRef.current);
+            roundTimeoutRef.current = null;
         }
+
+        setRoundState(ROUND_STATES.LISTENING);
+        setTimer(ROUND_TIME);
+        setRoundStartTime(Date.now());
+
+        // Clear any previous results
+        clearBlob();
+
+        // Start VAD listening with pronunciation scoring
+        if (startListening) {
+            console.log('🎤 Starting VAD listening with pronunciation scoring...');
+            await startListening();
+        }
+
+        // Set timeout for 10 seconds - if no speech detected, process anyway
+        roundTimeoutRef.current = setTimeout(() => {
+            console.log('⏰ 10 seconds timeout - processing without speech');
+            if (roundTimeoutRef.current) {
+                roundTimeoutRef.current = null;
+                handleTimeUp();
+            }
+        }, ROUND_TIME * 1000);
     };
 
-    const handleStopRecording = async () => {
-        console.log('🛑 handleStopRecording called', { isRecording });
+    const handleTimeUp = async () => {
+        console.log('⏰ Time up - no speech detected', {
+            roundState,
+            isListening,
+            currentWord: currentWord?.word
+        });
 
-        if (!isRecording) {
-            console.log('⚠️ Not recording, nothing to stop');
+        // Only process if we're still in listening state AND not already processing
+        if (roundState !== ROUND_STATES.LISTENING || isProcessingResultRef.current) {
+            console.log('⚠️ Ignoring timeout - not in correct state:', {
+                roundState,
+                isProcessingResult: isProcessingResultRef.current
+            });
             return;
         }
 
-        try {
-            console.log('🛑 Calling stopRecording from hook...');
-            const audioBlob = await stopRecording();
-            console.log('✅ stopRecording completed, got blob:', {
-                hasBlob: !!audioBlob,
-                size: audioBlob?.size,
-                type: audioBlob?.type
-            });
-
-            // Clear the timeout if it exists
-            if (recordingTimeoutRef.current) {
-                clearTimeout(recordingTimeoutRef.current);
-                recordingTimeoutRef.current = null;
-                console.log('🧹 Cleared auto-stop timeout');
-            }
-
-            // Process the audio blob
-            if (audioBlob && audioBlob.size > 0) {
-                console.log('🔄 Processing audio blob...');
-                await processAudioBlob(audioBlob);
-            } else {
-                console.log('❌ No valid audio blob, using fallback');
-                handleChantResultFallback('');
-            }
-
-        } catch (error) {
-            console.error('❌ Error in handleStopRecording:', error);
-            handleChantResultFallback('');
+        // Stop VAD listening
+        if (isListening && stopListening) {
+            console.log('🛑 Stopping VAD listening due to timeout...');
+            await stopListening();
         }
+
+        // Double check we're still not processing (race condition protection)
+        if (isProcessingResultRef.current) {
+            console.log('⚠️ Result processing started during timeout, aborting timeout handler');
+            return;
+        }
+
+        setRoundState(ROUND_STATES.PROCESSING);
+
+        // Process with no audio (failed pronunciation)
+        const failResult = {
+            total_score: 0,
+            text_refs: currentWord.word,
+            result: [{
+                word: currentWord.word,
+                letters: currentWord.word.split('').map(letter => ({
+                    letter: letter.toLowerCase(),
+                    score: 0
+                }))
+            }]
+        };
+
+        handlePronunciationResult(failResult, 'TIMEOUT_HANDLER');
     };
 
-    const stopRecordingManual = async () => {
-        // Stop speech recognition if it's running
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-        }
 
-        // Stop audio recording
-        if (isRecording) {
-            await handleStopRecording();
-        }
-    };
 
-    // Process audio blob and call pronunciation API
-    const processAudioBlob = async (audioBlob) => {
-        console.log('🔄 processAudioBlob called', {
+    const handlePronunciationResult = (result, source = 'unknown') => {
+        console.log('🎯 Handling pronunciation result:', {
+            source,
+            result,
+            totalScore: result.total_score,
+            textRefs: result.text_refs,
             currentWord: currentWord?.word,
-            audioBlobSize: audioBlob.size,
-            audioBlobType: audioBlob.type,
-            gameState,
+            roundState,
+            isProcessingResult: isProcessingResultRef.current,
             timestamp: new Date().toISOString()
         });
 
-        if (!currentWord) {
-            console.error('❌ No current word, skipping processing', {
-                currentWord,
-                gameState,
-                timestamp: new Date().toISOString()
+        // Prevent multiple processing of results (synchronous check)
+        if (isProcessingResultRef.current) {
+            console.log('⚠️ Already processing a result, ignoring this one from:', source);
+            return;
+        }
+
+        // Only process if we're still in listening state
+        if (roundState !== ROUND_STATES.LISTENING && roundState !== ROUND_STATES.PROCESSING) {
+            console.log('⚠️ Not in correct state for processing result:', roundState, 'from:', source);
+            return;
+        }
+
+        // Verify result matches current word
+        if (result.text_refs && currentWord?.word &&
+            result.text_refs.toLowerCase() !== currentWord.word.toLowerCase()) {
+            console.error('🚨 WORD MISMATCH! Ignoring result from:', source, {
+                expected: currentWord.word,
+                received: result.text_refs
             });
             return;
         }
 
-        // Check if blob has meaningful size
-        if (audioBlob.size < 1000) { // Less than 1KB probably means no real audio
-            console.log('⚠️ Audio blob too small, using fallback');
-            handleChantResultFallback('');
-            return;
-        }
+        // Set processing flag to prevent duplicate processing (synchronous)
+        console.log('✅ Processing result from:', source, '- Setting processing flag');
+        isProcessingResultRef.current = true;
+        setRoundState(ROUND_STATES.PROCESSING);
 
-        setIsProcessingAudio(true);
-
-        try {
-
-            // Call pronunciation API with unique identifier
-            const requestId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-            const requestWord = currentWord.word;
-
-            console.log('🚀 Starting API request:', {
-                requestId,
-                requestWord,
-                timestamp: new Date().toISOString()
-            });
-
-            // Track this request
-            setActiveApiRequest({ requestId, word: requestWord });
-
-            const result = await checkPronunciation(audioBlob, requestWord, requestId);
-
-            console.log('📥 API result received:', {
-                requestId,
-                requestWord,
-                result,
-                currentWordNow: currentWord?.word,
-                wordChanged: requestWord !== currentWord?.word
-            });
-
-            // Check if this is still the active request and word hasn't changed
-            if (requestWord !== currentWord?.word) {
-                console.warn('🚨 WORD CHANGED DURING API CALL - IGNORING RESULT:', {
-                    requestId,
-                    requestWord,
-                    currentWordNow: currentWord?.word
-                });
-                return; // Ignore this result
-            }
-
-            if (result) {
-                // Process API result
-                console.log('✅ Processing REAL API result for word:', requestWord, {
-                    hasResult: !!result,
-                    hasTotalScore: result.total_score !== undefined,
-                    hasLetters: result.result?.[0]?.letters?.length > 0,
-                    totalScore: result.total_score,
-                    textRefs: result.text_refs
-                });
-                handlePronunciationResult(result);
-            } else {
-                // API failed, treat as failed pronunciation
-                console.log('❌ API returned null, using MOCK fallback for word:', requestWord);
-                handleChantResultFallback('');
-            }
-        } catch (error) {
-            console.error('Error processing audio:', error);
-            // Fallback to failed pronunciation
-            handleChantResultFallback('');
-        } finally {
-            setIsProcessingAudio(false);
-            setActiveApiRequest(null);
-        }
-    };
-
-    // Handle pronunciation API result
-    const handlePronunciationResult = (apiResult) => {
-        if (!currentWord) return;
-
-        console.log('🔍 handlePronunciationResult called', {
-            currentWord: currentWord.word,
-            apiResult: apiResult,
-            isRealAPI: !apiResult.isMockData,
-            timestamp: new Date().toISOString()
-        });
-
-        // Verify the API result matches current word
-        const apiWord = apiResult.text_refs || (apiResult.result && apiResult.result[0] && apiResult.result[0].word);
-        const wordsMatch = apiWord?.toLowerCase() === currentWord.word.toLowerCase();
-
-        console.log('🔍 Word verification:', {
-            apiWord,
-            currentWord: currentWord.word,
-            match: wordsMatch,
-            timestamp: new Date().toISOString()
-        });
-
-        if (apiWord && !wordsMatch) {
-            console.error('🚨 CRITICAL: API result word mismatch - REJECTING RESULT:', {
-                apiWord,
-                currentWord: currentWord.word,
-                timestamp: new Date().toISOString()
-            });
-            // Use fallback if words don't match
-            handleChantResultFallback('');
-            return;
-        }
-
-        console.log('✅ Word verification passed, processing result for:', currentWord.word);
-
-        // Store pronunciation result for display
-        setPronunciationResult(apiResult);
+        setPronunciationResult(result);
         setShowPronunciationResult(true);
 
-        // Extract accuracy from total_score * 100
-        const accuracy = (apiResult.total_score || 0) * 100;
-        console.log('Extracted accuracy:', accuracy);
-
+        const accuracy = (result.total_score || 0) * 100;
         let damage = 0;
-        let baseScore = Math.floor(Math.random() * 4) + 5; // Random 5-8 points
+        let baseScore = Math.floor(Math.random() * 4) + 5;
         let finalScore = 0;
+
+        console.log('📊 Scoring calculation:', {
+            totalScore: result.total_score,
+            accuracy: accuracy,
+            accuracyRounded: Math.round(accuracy)
+        });
 
         if (accuracy >= 85) {
             // Perfect pronunciation (85% - 100%)
-            damage = 2; // Critical hit
-            finalScore = baseScore * 3; // 3x multiplier
+            damage = 2;
+            finalScore = baseScore * 3;
+            console.log('🎯 PERFECT! Damage:', damage, 'Score:', finalScore);
             sounds.current?.perfect();
             setCharacterState('player', 'attack', 1500);
             launchSpell('player');
             setTimeout(() => setCharacterState('enemy', 'hurt', 1000), 950);
         } else if (accuracy >= 60) {
-            // Successful pronunciation (60% - 85%)
+            // Good pronunciation (60% - 84%)
             damage = 1;
-            finalScore = baseScore; // Normal score
+            finalScore = baseScore;
+            console.log('✅ GOOD! Damage:', damage, 'Score:', finalScore);
             sounds.current?.success();
             setCharacterState('player', 'attack', 1000);
             launchSpell('player');
             setTimeout(() => setCharacterState('enemy', 'hurt', 800), 950);
         } else {
-            // Failed pronunciation (0% - 60%)
+            // Failed pronunciation (0% - 59%) - Monster attacks player
             damage = 0;
             finalScore = 0;
+            console.log('❌ FAILED! Accuracy:', accuracy, '% - Monster attacks player');
             sounds.current?.fail();
-            setCharacterState('player', 'hurt', 1000);
-            setPlayerHP(prev => Math.max(0, prev - 1));
+
+            // Monster attack animation sequence
+            setCharacterState('enemy', 'attack', 1000);
+            launchSpell('enemy');
+            setTimeout(() => {
+                setCharacterState('player', 'hurt', 1000);
+                setPlayerHP(prev => Math.max(0, prev - 1));
+            }, 950); // Player gets hurt when spell hits
         }
 
-        // Hide pronunciation result after 3 seconds
-        setTimeout(() => {
-            setShowPronunciationResult(false);
-            setPronunciationResult(null);
-        }, 3000);
+        console.log('📊 Final damage calculation:', {
+            accuracy,
+            damage,
+            finalScore,
+            willContinue: true
+        });
 
+        // Apply damage and score
         if (damage > 0) {
+            console.log('⚔️ PLAYER ATTACKS! Damage to enemy:', damage);
             const newEnemyHP = Math.max(0, enemyHP - damage);
             setEnemyHP(newEnemyHP);
             setScore(prev => prev + finalScore);
 
+            console.log('🎯 Enemy HP:', enemyHP, '→', newEnemyHP);
+
             if (newEnemyHP === 0) {
-                // Enemy dies - go to next floor
+                // Enemy defeated
+                console.log('💀 Enemy defeated!');
                 setCharacterState('enemy', 'dead');
-                // Victory bonus: (Enemy Max HP x 10) + Math.ceil(Current Floor x 0.1)
                 const victoryBonus = (getEnemyMaxHP(floor) * 10) + Math.ceil(floor * 0.1);
                 setScore(prev => prev + victoryBonus);
                 setTimeout(() => nextFloor(), 2000);
             } else {
-                // Enemy still alive - get new word for next attack
-                setTimeout(() => nextWord(), 1500); // Delay to show result first
+                // Continue to next word
+                console.log('➡️ Continue to next word');
+                setTimeout(() => nextWord(), 2000);
             }
         } else {
+            console.log('💔 PLAYER FAILED! Player takes damage. Current HP:', playerHP);
             if (playerHP <= 1) {
+                // Player dies
+                console.log('💀 Player dies! Game over in 2s...');
                 setCharacterState('player', 'dead');
-                setTimeout(() => setGameState(GAME_STATES.GAMEOVER), 2000);
+                setTimeout(() => {
+                    console.log('💀 Executing game over...');
+                    setGameState(GAME_STATES.GAMEOVER);
+                }, 2000);
             } else {
-                // Failed pronunciation - get new word to try again
-                setTimeout(() => nextWord(), 1500);
+                // Continue to next word
+                console.log('➡️ Player survives, continue to next word in 2s...');
+                setTimeout(() => {
+                    console.log('🔄 Executing nextWord (failed case)...');
+                    nextWord();
+                }, 2000);
             }
         }
-    };
 
-    // Fallback function for speech recognition or failed API calls
-    const handleChantResultFallback = (transcript) => {
-        if (!currentWord) return;
+        setRoundState(ROUND_STATES.FINISHED);
 
-        console.log('handleChantResultFallback called', {
-            transcript,
-            currentWord: currentWord.word
-        });
-
-        const targetWord = currentWord.word;
-        let accuracy = 0;
-
-        // Simple text matching for fallback
-        if (transcript === targetWord) {
-            accuracy = 95; // Perfect match
-        } else if (transcript.includes(targetWord) || targetWord.includes(transcript)) {
-            accuracy = 70; // Partial match
-        } else {
-            // Random accuracy for demo when no real input
-            accuracy = Math.random() * 100;
-        }
-
-        console.log('Fallback accuracy calculated:', accuracy);
-
-        // Create mock API result with correct structure
-        const mockResult = {
-            total_score: accuracy / 100, // Convert to 0-1 range like real API
-            text_refs: currentWord.word,
-            isMockData: true, // Flag to identify mock data
-            result: [{
-                word: currentWord.word,
-                letters: currentWord.word.split('').map((letter, index) => ({
-                    letter: letter.toLowerCase(),
-                    score: (accuracy / 100) + (Math.random() - 0.5) * 0.2, // Vary individual letter scores
-                    start_time: index * 0.1,
-                    end_time: (index + 1) * 0.1
-                }))
-            }]
-        };
-
-        console.log('Mock result created:', mockResult);
-
-        // Use the same logic as API result
-        handlePronunciationResult(mockResult);
-    };
-
-
-
-    const handleTimeout = () => {
-        sounds.current?.damage();
-        setCharacterState('enemy', 'attack', 1000);
-        launchSpell('enemy');
-        setTimeout(() => setCharacterState('player', 'hurt', 800), 950); // Hurt when spell hits
-
-        const newPlayerHP = Math.max(0, playerHP - 1);
-        setPlayerHP(newPlayerHP);
-
-        if (newPlayerHP === 0) {
-            setCharacterState('player', 'dead');
-            setTimeout(() => setGameState(GAME_STATES.GAMEOVER), 2000);
-        } else {
-            // Player survived - get new word for next round
-            setTimeout(() => nextWord(), 1500);
-        }
+        // Hide result after 3 seconds
+        setTimeout(() => {
+            setShowPronunciationResult(false);
+            setPronunciationResult(null);
+            console.log('🧹 Hiding pronunciation result');
+        }, 3000);
     };
 
     const nextWord = async () => {
-        // Generate new word for current floor
+        console.log('🔄 Moving to next word');
+
+        // Clean up any existing timeouts
+        if (roundTimeoutRef.current) {
+            clearTimeout(roundTimeoutRef.current);
+            roundTimeoutRef.current = null;
+        }
+
+        // Stop any active VAD listening
+        if (isListening && stopListening) {
+            console.log('🛑 Stopping VAD for next word...');
+            await stopListening();
+        }
+
+        // Clear previous results
+        clearBlob();
+
+        // Reset processing flag FIRST
+        isProcessingResultRef.current = false;
+        console.log('🔓 Reset processing flag to FALSE (nextWord)');
+
         const newWord = getRandomWord(floor);
         setCurrentWord(newWord);
-        setTimer(ENEMY_ATTACK_TIME);
-
-        // Reset pronunciation result
+        setRoundState(ROUND_STATES.WAITING);
+        setTimer(ROUND_TIME);
         setPronunciationResult(null);
         setShowPronunciationResult(false);
 
-        console.log('🔄 Moving to next word:', newWord.word);
-
-        // Restart VAD listening for new word after a short delay
-        if (vadMethods && startListening) {
-            setTimeout(async () => {
-                if (gameState === GAME_STATES.INGAME) {
-                    await startListening();
-                }
-            }, 1000);
-        }
+        console.log('✅ Ready for next word:', newWord.word);
     };
 
-    const nextFloor = async () => {
+    const nextFloor = () => {
+        console.log('🏆 Moving to next floor');
         const newFloor = floor + 1;
         setFloor(newFloor);
         sounds.current?.levelUp();
 
-        // Reset character states for new floor
+        // Reset character states
         setPlayerState('default');
         setEnemyState('default');
         setFlyingSpell(null);
-        setPronunciationResult(null);
-        setShowPronunciationResult(false);
 
         // Heal on floors divisible by 5
         if (newFloor % 5 === 0) {
@@ -942,102 +643,16 @@ function App() {
         setEnemyHP(getEnemyMaxHP(newFloor));
         const newWord = getRandomWord(newFloor);
         setCurrentWord(newWord);
-        setTimer(ENEMY_ATTACK_TIME);
+        setRoundState(ROUND_STATES.WAITING);
+        setTimer(ROUND_TIME);
+        setPronunciationResult(null);
+        setShowPronunciationResult(false);
 
-        console.log('🏆 Moving to floor:', newFloor, 'with word:', newWord.word);
-
-        // Restart VAD listening for new floor after a short delay
-        if (vadMethods && startListening) {
-            setTimeout(async () => {
-                if (gameState === GAME_STATES.INGAME) {
-                    await startListening();
-                }
-            }, 2000);
-        }
+        // Reset processing flag
+        isProcessingResultRef.current = false;
+        console.log('🔓 Reset processing flag to FALSE (nextFloor)');
     };
 
-    // API placeholder functions
-    const handleTTS = async () => {
-        if (!currentWord || loadingTTS) return;
-
-        setLoadingTTS(true);
-        try {
-            // Placeholder for Gemini TTS API call
-            // const response = await fetch('/api/tts', {
-            //   method: 'POST',
-            //   headers: { 'Content-Type': 'application/json' },
-            //   body: JSON.stringify({ text: currentWord.word, model: 'gemini-2.5-flash-preview-tts' })
-            // });
-
-            // Mock delay
-            await new Promise(resolve => setTimeout(resolve, 1000));
-
-            // For now, use browser speech synthesis as fallback
-            if ('speechSynthesis' in window) {
-                const utterance = new SpeechSynthesisUtterance(currentWord.word);
-                speechSynthesis.speak(utterance);
-            }
-        } catch (error) {
-            console.error('TTS Error:', error);
-        } finally {
-            setLoadingTTS(false);
-        }
-    };
-
-    const handleHint = async () => {
-        if (!currentWord || loadingHint || showHint) return;
-
-        setLoadingHint(true);
-        try {
-            // Placeholder for Gemini LLM API call
-            // const response = await fetch('/api/hint', {
-            //   method: 'POST',
-            //   headers: { 'Content-Type': 'application/json' },
-            //   body: JSON.stringify({ 
-            //     word: currentWord.word, 
-            //     model: 'gemini-2.5-flash-preview-09-2025',
-            //     prompt: `Generate a simple Vietnamese definition and pronunciation hint for the English word "${currentWord.word}"`
-            //   })
-            // });
-
-            // Mock delay and response
-            await new Promise(resolve => setTimeout(resolve, 1500));
-
-            // Mock Vietnamese hint
-            const mockHints = {
-                'CAT': 'Con mèo - phát âm: /kæt/',
-                'DOOR': 'Cửa ra vào - phát âm: /dɔːr/',
-                'APPLE': 'Quả táo - phát âm: /ˈæpəl/',
-                'RUN': 'Chạy - phát âm: /rʌn/',
-                'TOWER': 'Tòa tháp - phát âm: /ˈtaʊər/',
-                'BEAM': 'Tia sáng - phát âm: /biːm/',
-                'MAGIC': 'Phép thuật - phát âm: /ˈmædʒɪk/',
-                'WIZARD': 'Phù thủy - phát âm: /ˈwɪzərd/',
-                'PHANTOM': 'Bóng ma - phát âm: /ˈfæntəm/',
-                'BEAUTIFUL': 'Đẹp - phát âm: /ˈbjuːtɪfəl/',
-                'EXTRAORDINARY': 'Phi thường - phát âm: /ɪkˈstrɔːrdəneri/',
-                'COMPLICATED': 'Phức tạp - phát âm: /ˈkɒmplɪkeɪtɪd/'
-            };
-
-            setHint(mockHints[currentWord.word] || 'Không có gợi ý');
-            setShowHint(true);
-
-            // Hide hint after 8 seconds
-            hintTimeoutRef.current = setTimeout(() => {
-                setShowHint(false);
-                setHint('');
-            }, 8000);
-
-        } catch (error) {
-            console.error('Hint Error:', error);
-        } finally {
-            setLoadingHint(false);
-        }
-    };
-
-    const canUseHint = playerHP < MAX_PLAYER_HP || floor >= 3;
-
-    // Animation state management
     const setCharacterState = (character, state, duration = 1000) => {
         if (character === 'player') {
             setPlayerState(state);
@@ -1052,17 +667,9 @@ function App() {
         }
     };
 
-    // Removed showSpellEffect function - only using flying spells now
-
-    // Flying spell projectile management
     const launchSpell = (caster) => {
-        // Launch flying projectile immediately
         setFlyingSpell({ type: caster, active: true });
-
-        // Remove flying spell after animation completes (1 second)
-        setTimeout(() => {
-            setFlyingSpell(null);
-        }, 1000);
+        setTimeout(() => setFlyingSpell(null), 1000);
     };
 
     // Render functions
@@ -1070,10 +677,7 @@ function App() {
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
             <h1 className="text-6xl font-bold mb-8 font-mono">ECHO TOWER</h1>
             <div className="w-64 h-4 bg-gray-800 rounded-full overflow-hidden">
-                <div
-                    className="h-full bg-cyan-400 transition-all duration-100"
-                    style={{ width: `${splashProgress}%` }}
-                />
+                <div className="h-full bg-cyan-400 transition-all duration-100" style={{ width: `${splashProgress}%` }} />
             </div>
             <p className="mt-4 text-xl">Loading... {splashProgress}%</p>
         </div>
@@ -1082,10 +686,7 @@ function App() {
     const renderMenu = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
             <h1 className="text-8xl font-bold mb-16 font-mono">ECHO TOWER</h1>
-            <p
-                className={`text-2xl font-mono transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-30'
-                    }`}
-            >
+            <p className={`text-2xl font-mono transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-30'}`}>
                 PRESS [SPACE] TO START
             </p>
         </div>
@@ -1097,15 +698,16 @@ function App() {
             <div className="max-w-3xl text-center space-y-4 text-xl">
                 <p>🧙‍♂️ Bạn là một pháp sư leo lên Tháp Echo</p>
                 <p>👹 Đánh bại quái vật bằng cách phát âm chính xác từ thần chú</p>
-                <p>🎤 <span className="text-yellow-400">VAD TỰ ĐỘNG:</span> Hệ thống sẽ tự động nghe và chấm điểm</p>
-                <p>⏰ Bạn có 10 giây trước khi quái vật tấn công</p>
-                <p>🗣️ Chỉ cần nói từ khi sẵn sàng - hệ thống tự động phát hiện</p>
-                <p>🤐 Sau 3 giây im lặng, hệ thống sẽ tự động chấm điểm</p>
+                <p>🎮 <span className="text-yellow-400">CÁCH CHƠI MỚI:</span></p>
+                <p>1️⃣ Nhấn [SPACE] để bắt đầu vòng chơi</p>
+                <p>2️⃣ Hệ thống đếm ngược 10 giây</p>
+                <p>3️⃣ Nói từ bất cứ lúc nào trong 10 giây</p>
+                <p>4️⃣ Hệ thống tự động chấm điểm khi bạn nói xong</p>
+                <p>5️⃣ Nếu không nói gì, hệ thống chấm điểm khi hết 10 giây</p>
                 <p>🎯 Phát âm hoàn hảo (85-100%): 2 sát thương, điểm x3</p>
                 <p>✅ Phát âm thành công (60-85%): 1 sát thương, điểm thường</p>
                 <p>❌ Phát âm thất bại (0-60%): Bạn mất 1 máu</p>
                 <p>❤️ Hồi 1 máu ở các tầng chia hết cho 5</p>
-                <p>🏆 Điểm thưởng chiến thắng: (HP Quái x 10) + (Tầng x 0.1)</p>
                 <p className="text-green-400 mt-8">NHẤN [SPACE] ĐỂ BẮT ĐẦU HÀNH TRÌNH</p>
             </div>
         </div>
@@ -1120,33 +722,28 @@ function App() {
                     <span className="text-2xl font-mono text-green-400">ĐIỂM: {score}</span>
                 </div>
 
-                {/* Timer/Status in top right */}
-                <div className={`text-4xl font-mono ${timer <= 5 ? 'text-red-500 animate-pulse' : 'text-cyan-400'}`}>
-                    {isRecording ? 'ĐANG GHI ÂM...' : 
-                     (vadMethods && isListening) ? 'ĐANG NGHE...' : 
-                     `${timer}s`}
+                {/* Round Status in top right */}
+                <div className={`text-2xl font-mono ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
+                    roundState === ROUND_STATES.LISTENING ? 'text-blue-400 animate-pulse' :
+                        'text-gray-400'
+                    }`}>
+                    {roundState === ROUND_STATES.PROCESSING ? 'ĐANG CHẤM ĐIỂM' :
+                        roundState === ROUND_STATES.LISTENING ? 'ĐANG NGHE' :
+                            roundState === ROUND_STATES.FINISHED ? 'HOÀN THÀNH' :
+                                'CHỜ BẮT ĐẦU'}
                 </div>
             </div>
 
-            {/* Main Battle Card - Single Card Layout */}
+            {/* Main Battle Area */}
             <div className="flex-1 flex flex-col">
                 <div className="bg-gray-900 rounded-lg p-8 flex-1 flex flex-col">
 
-                    {/* Battle Area - Player vs Enemy */}
+                    {/* Battle Characters */}
                     <div className="flex-1 grid grid-cols-2 gap-12 items-center">
-
-                        {/* Left Side - Player */}
+                        {/* Player */}
                         <div className="flex flex-col items-center space-y-6">
                             <h3 className="text-2xl font-mono text-cyan-400">NGƯỜI CHƠI</h3>
-
-                            {/* Player Avatar */}
-                            <PlayerCharacter
-                                ref={playerRef}
-                                state={playerState}
-                                className={`w-32 h-32 ${isRecording ? 'animate-pulse' : ''}`}
-                            />
-
-                            {/* Player HP - Hearts */}
+                            <PlayerCharacter ref={playerRef} state={playerState} className="w-32 h-32" />
                             <div className="flex space-x-2">
                                 {Array.from({ length: MAX_PLAYER_HP }, (_, i) => (
                                     <HeartIcon
@@ -1156,24 +753,13 @@ function App() {
                                     />
                                 ))}
                             </div>
-
-                            <div className="text-xl font-mono text-cyan-400">
-                                HP: {playerHP}/{MAX_PLAYER_HP}
-                            </div>
+                            <div className="text-xl font-mono text-cyan-400">HP: {playerHP}/{MAX_PLAYER_HP}</div>
                         </div>
 
-                        {/* Right Side - Enemy */}
+                        {/* Enemy */}
                         <div className="flex flex-col items-center space-y-6">
                             <h3 className="text-2xl font-mono text-red-500">QUÁI VẬT</h3>
-
-                            {/* Enemy Avatar */}
-                            <EnemyCharacter
-                                ref={enemyRef}
-                                state={enemyState}
-                                className={`w-32 h-32 ${timer <= 5 && enemyState === 'default' ? 'animate-pulse' : ''}`}
-                            />
-
-                            {/* Enemy HP - Hearts */}
+                            <EnemyCharacter ref={enemyRef} state={enemyState} className="w-32 h-32" />
                             <div className="flex space-x-2">
                                 {Array.from({ length: getEnemyMaxHP(floor) }, (_, i) => (
                                     <HeartIcon
@@ -1183,31 +769,16 @@ function App() {
                                     />
                                 ))}
                             </div>
-
-                            <div className="text-xl font-mono text-red-500">
-                                HP: {enemyHP}/{getEnemyMaxHP(floor)}
-                            </div>
+                            <div className="text-xl font-mono text-red-500">HP: {enemyHP}/{getEnemyMaxHP(floor)}</div>
                         </div>
                     </div>
 
-                    {/* Current Word Target - Center */}
+                    {/* Current Word */}
                     {currentWord && (
                         <div className="text-center bg-yellow-900 border border-yellow-500 rounded-lg p-6 my-8 mx-auto max-w-md">
                             <h4 className="text-lg font-mono mb-2 text-yellow-400">TỪ CẦN PHÁT ÂM:</h4>
-                            <div className="mb-2">
-                                {showPronunciationResult ? (
-                                    <div>
-                                        <PronunciationDisplay
-                                            word={currentWord.word}
-                                            pronunciationResult={pronunciationResult}
-                                        />
-                                        <ScoreDisplay pronunciationResult={pronunciationResult} />
-                                    </div>
-                                ) : (
-                                    <div className="text-5xl font-bold text-yellow-300 font-mono">
-                                        {currentWord.word}
-                                    </div>
-                                )}
+                            <div className="text-5xl font-bold text-yellow-300 font-mono mb-2">
+                                {currentWord.word}
                             </div>
                             <p className="text-sm text-yellow-600">
                                 Độ khó: {currentWord.diff} | Loại: {currentWord.type} | Âm tiết: {currentWord.syllables}
@@ -1215,127 +786,81 @@ function App() {
                         </div>
                     )}
 
+                    {/* Timer/Status */}
+                    <div className="text-center mb-6">
+                        <div className={`text-6xl font-mono font-bold ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
+                            roundState === ROUND_STATES.LISTENING && timer <= 5 ? 'text-red-500 animate-pulse' :
+                                roundState === ROUND_STATES.LISTENING ? 'text-cyan-400' :
+                                    'text-gray-400'
+                            }`}>
+                            {roundState === ROUND_STATES.PROCESSING ? 'CHẤM ĐIỂM' :
+                                roundState === ROUND_STATES.LISTENING ? `${timer}s` :
+                                    roundState === ROUND_STATES.FINISHED ? 'XONG' :
+                                        'SẴN SÀNG'}
+                        </div>
+                        <p className="text-lg text-gray-400 mt-2">
+                            {roundState === ROUND_STATES.PROCESSING ? 'Đang xử lý âm thanh...' :
+                                roundState === ROUND_STATES.LISTENING ? 'Hãy nói từ bất cứ lúc nào' :
+                                    roundState === ROUND_STATES.FINISHED ? 'Vòng chơi hoàn thành' :
+                                        'Nhấn SPACE để bắt đầu'}
+                        </p>
+                    </div>
+
                     {/* Instructions */}
                     <div className="text-center text-lg font-mono mb-6">
-                        <p className={
-                            isProcessingAudio ? 'text-yellow-400 animate-pulse' :
-                                isRecording ? 'text-green-400 animate-pulse' :
-                                    (vadMethods && isListening) ? 'text-blue-400 animate-pulse' :
-                                        'text-cyan-400'
-                        }>
-                            {isProcessingAudio ? 'ĐANG CHẤM ĐIỂM...' :
-                                isRecording ? 'ĐANG GHI ÂM - HÃY NÓI TỪ!' :
-                                    (vadMethods && isListening) ? 'ĐANG NGHE - HÃY NÓI TỪ KHI SẴN SÀNG' :
-                                        vadMethods ? 'NHẤN [SPACE] ĐỂ BẮT ĐẦU NGHE VAD' :
-                                            'NHẤN [SPACE] ĐỂ BẮT ĐẦU THU ÂM'}
-                        </p>
-                        {vadMethods && isListening && (
-                            <p className="text-sm text-gray-400 mt-2">
-                                VAD sẽ tự động phát hiện giọng nói và chấm điểm sau 3 giây im lặng
-                            </p>
+                        {roundState === ROUND_STATES.WAITING && (
+                            <p className="text-green-400 animate-pulse">NHẤN [SPACE] ĐỂ BẮT ĐẦU VÒNG CHƠI</p>
+                        )}
+                        {roundState === ROUND_STATES.LISTENING && (
+                            <div>
+                                <p className="text-blue-400">NÓI TỪ BẤT CỨ LÚC NÀO - HỆ THỐNG SẼ TỰ ĐỘNG CHẤM ĐIỂM</p>
+                                <p className="text-sm text-gray-400 mt-2">
+                                    VAD Status: {isListening ? '🎤 ĐANG NGHE' : '❌ KHÔNG HOẠT ĐỘNG'}
+                                </p>
+                            </div>
                         )}
                     </div>
 
-                    {/* Action Buttons - Bottom Center */}
-                    <div className="flex justify-center space-x-6">
-                        <button
-                            onClick={handleTTS}
-                            disabled={loadingTTS}
-                            className="px-8 py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 text-white font-mono rounded-lg transition-colors text-lg"
-                        >
-                            {loadingTTS ? 'ĐANG TẢI...' : '🔊 NGHE TỪ'}
-                        </button>
-
-                        {canUseHint && (
-                            <button
-                                onClick={handleHint}
-                                disabled={loadingHint || showHint}
-                                className="px-8 py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 text-white font-mono rounded-lg transition-colors text-lg"
-                            >
-                                {loadingHint ? 'ĐANG TẢI...' : '💡 GỢI Ý'}
-                            </button>
-                        )}
-
-                        {/* Debug buttons for testing */}
-                        <div className="flex space-x-2">
-                            <button
-                                onClick={async () => {
-                                    console.log('🔧 DEBUG: Toggle VAD/Recording');
-                                    if (vadMethods) {
-                                        if (isListening) {
-                                            await stopListening();
-                                        } else {
-                                            await startListening();
-                                        }
-                                    } else {
-                                        if (isRecording) {
-                                            await stopRecordingManual();
-                                        } else {
-                                            await startChanting();
-                                        }
-                                    }
-                                }}
-                                className="px-4 py-2 bg-gray-600 hover:bg-gray-700 text-white font-mono rounded text-sm"
-                            >
-                                🔧 {vadMethods ? (isListening ? 'STOP VAD' : 'START VAD') : (isRecording ? 'STOP' : 'REC')}
-                            </button>
-
-                            <button
-                                onClick={() => {
-                                    console.log('🔧 DEBUG: Force using REAL API data');
-                                    if (currentWord) {
-                                        // Simulate real API response
-                                        const realApiData = {
-                                            total_score: 0.75,
-                                            text_refs: currentWord.word,
-                                            result: [{
-                                                word: currentWord.word,
-                                                letters: currentWord.word.split('').map((letter, index) => ({
-                                                    letter: letter.toLowerCase(),
-                                                    score: 0.7 + Math.random() * 0.3,
-                                                    start_time: index * 0.1,
-                                                    end_time: (index + 1) * 0.1
-                                                }))
-                                            }]
-                                        };
-                                        console.log('🔧 Simulating real API data:', realApiData);
-                                        handlePronunciationResult(realApiData);
-                                    }
-                                }}
-                                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-mono rounded text-sm"
-                            >
-                                🔧 API
-                            </button>
+                    {/* Debug Controls */}
+                    <div className="text-center mb-6">
+                        <div className="flex justify-center space-x-4">
+                            
                         </div>
                     </div>
+
+                    {/* Pronunciation Result */}
+                    {showPronunciationResult && pronunciationResult && (
+                        <div className="text-center bg-purple-900 border border-purple-500 rounded-lg p-4 mb-6 mx-auto max-w-md">
+                            <h4 className="text-lg font-mono mb-2 text-purple-400">KẾT QUẢ PHÁT ÂM:</h4>
+                            <div className="text-3xl font-bold text-white mb-2">
+                                {Math.round((pronunciationResult.total_score || 0) * 100)}%
+                            </div>
+                            <p className="text-sm text-purple-300 mb-2">
+                                {(pronunciationResult.total_score || 0) >= 0.85 ? '🎯 HOÀN HẢO! (2 damage)' :
+                                    (pronunciationResult.total_score || 0) >= 0.60 ? '✅ THÀNH CÔNG! (1 damage)' :
+                                        '❌ THẤT BẠI! (Player mất máu)'}
+                            </p>
+                            <div className="text-xs text-gray-400">
+                                <p>Raw score: {pronunciationResult.total_score}</p>
+                                <p>Word: {pronunciationResult.text_refs}</p>
+                                <p>Expected: {currentWord?.word}</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
 
             {/* Flying Spell Effect */}
-            <FlyingSpell
-                flyingSpell={flyingSpell}
-                playerRef={playerRef}
-                enemyRef={enemyRef}
-            />
-
-            {/* Hint Display - Bottom Center */}
-            {showHint && hint && (
-                <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 bg-purple-900 border border-purple-500 rounded-lg p-4 max-w-md text-center z-10">
-                    <p className="text-purple-200 text-lg">{hint}</p>
-                </div>
-            )}
+            <FlyingSpell flyingSpell={flyingSpell} playerRef={playerRef} enemyRef={enemyRef} />
         </div>
     );
 
     const renderGameOver = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
             <h2 className="text-6xl font-bold mb-8 font-mono text-red-500">KẾT THÚC GAME</h2>
-
             <div className="text-center space-y-4 text-2xl font-mono mb-8">
                 <p>ĐIỂM CUỐI: <span className="text-yellow-400">{score}</span></p>
                 <p>SỐ TẦNG ĐÃ LEO: <span className="text-green-400">{floor}</span></p>
-
-                {/* Mock Rank */}
                 <div className="mt-8">
                     <h3 className="text-xl mb-4">XẾP HẠNG THÁP</h3>
                     <div className="space-y-2 text-lg">
@@ -1352,7 +877,6 @@ function App() {
                     </div>
                 </div>
             </div>
-
             <p className="text-xl font-mono animate-pulse">NHẤN [SPACE] ĐỂ QUAY VỀ MENU</p>
         </div>
     );
