@@ -1,0 +1,38 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap');
+
+body {
+  margin: 0;
+  font-family: 'JetBrains Mono', monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #000000;
+  color: #00ffff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.font-mono {
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Flying spell animations - dynamic positioning */
+@keyframes flyToTarget {
+  0% {
+    transform: translate(-50%, -50%) scale(1);
+    opacity: 1;
+  }
+  95% {
+    transform: translate(calc(var(--end-x) - var(--start-x) - 50%), calc(var(--end-y) - var(--start-y) - 50%)) scale(1);
+    opacity: 1;
+  }
+  100% {
+    transform: translate(calc(var(--end-x) - var(--start-x) - 50%), calc(var(--end-y) - var(--start-y) - 50%)) scale(0.8);
+    opacity: 0;
+  }
+}
