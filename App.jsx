@@ -239,7 +239,7 @@ const FlyingSpell = ({ flyingSpell, playerRef, enemyRef }) => {
     };
 
     return (
-        <div className="fixed z-20 w-24 h-24 animate-[flyToTarget_1s_linear_forwards]" style={style}>
+        <div className="fixed z-20 w-12 h-12 md:w-24 md:h-24 animate-[flyToTarget_1s_linear_forwards]" style={style}>
             <img src={spellImage} alt="Flying Spell" className="w-full h-full object-contain" />
         </div>
     );
@@ -823,49 +823,63 @@ function App() {
 
     const renderMenu = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
-            <h1 className="text-8xl font-bold mb-16 font-mono">ECHO TOWER</h1>
-            <p className={`text-2xl font-mono transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-30'}`}>
+            <h1 className="text-4xl md:text-8xl font-bold mb-8 md:mb-16 font-mono">ECHO TOWER</h1>
+            <p className={`text-xl md:text-2xl font-mono transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-30'} hidden md:block`}>
                 PRESS [SPACE] TO START
             </p>
+
+            {/* Mobile Button for Menu */}
+            <button
+                onClick={handleSpacePress}
+                className={`md:hidden bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-70'}`}
+            >
+                🚀 BẮT ĐẦU GAME
+            </button>
         </div>
     );
 
     const renderTutorial = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400 p-8">
             <h2 className="text-4xl font-bold mb-8 font-mono">CÁCH CHƠI</h2>
-            <div className="max-w-3xl text-center space-y-4 text-xl">
+            <div className="max-w-3xl text-center space-y-2 md:space-y-4 text-sm md:text-xl px-4">
                 <p>🧙‍♂️ Bạn là một pháp sư leo lên Tháp Echo</p>
                 <p>👹 Đánh bại quái vật bằng cách phát âm chính xác từ thần chú</p>
-                <p>🎮 <span className="text-yellow-400">CÁCH CHƠI MỚI:</span></p>
-                <p>1️⃣ Nhấn [SPACE] để bắt đầu vòng chơi</p>
+                <p>🎮 <span className="text-yellow-400">CÁCH CHƠI:</span></p>
+                <p>1️⃣ <span className="hidden md:inline">Nhấn [SPACE]</span><span className="md:hidden">Nhấn nút</span> để bắt đầu vòng chơi</p>
                 <p>2️⃣ Hệ thống đếm ngược 10 giây</p>
-                <p>3️⃣ Nói từ bất cứ lúc nào trong 10 giây</p>
-                <p>4️⃣ Hệ thống tự động chấm điểm khi bạn nói xong</p>
-                <p>5️⃣ Nếu không nói gì, hệ thống chấm điểm khi hết 10 giây</p>
+                <p>3️⃣ Nói từ bất cứ lúc nào - hệ thống tự động chấm điểm</p>
                 <p>🎯 Phát âm hoàn hảo (85-100%): 2 sát thương, điểm x3</p>
                 <p>✅ Phát âm thành công (60-85%): 1 sát thương, điểm thường</p>
                 <p>❌ Phát âm thất bại (0-60%): Bạn mất 1 máu</p>
                 <p>❤️ Hồi 1 máu ở các tầng chia hết cho 5</p>
-                <p className="text-green-400 mt-8">NHẤN [SPACE] ĐỂ BẮT ĐẦU HÀNH TRÌNH</p>
+                <p className="text-green-400 mt-8 hidden md:block">NHẤN [SPACE] ĐỂ BẮT ĐẦU HÀNH TRÌNH</p>
+
+                {/* Mobile Button for Tutorial */}
+                <button
+                    onClick={handleSpacePress}
+                    className="md:hidden bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg animate-pulse mt-8"
+                >
+                    ⚔️ BẮT ĐẦU HÀNH TRÌNH
+                </button>
             </div>
         </div>
     );
 
     const renderGame = () => (
-        <div className="min-h-screen bg-black text-cyan-400 p-4 flex flex-col">
+        <div className="min-h-screen bg-black text-cyan-400 p-2 md:p-4 flex flex-col">
             {/* Top HUD */}
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center space-x-6">
-                    <span className="text-2xl font-mono text-yellow-400">TẦNG: {floor}</span>
-                    <span className="text-2xl font-mono text-green-400">ĐIỂM: {score}</span>
+            <div className="flex justify-between items-center mb-4 md:mb-8">
+                <div className="flex items-center space-x-2 md:space-x-6">
+                    <span className="text-sm md:text-2xl font-mono text-yellow-400">TẦNG: {floor}</span>
+                    <span className="text-sm md:text-2xl font-mono text-green-400">ĐIỂM: {score}</span>
                 </div>
 
                 {/* Round Status in top right */}
-                <div className={`text-2xl font-mono ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
+                <div className={`text-xs md:text-2xl font-mono ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
                     roundState === ROUND_STATES.LISTENING ? 'text-blue-400 animate-pulse' :
                         'text-gray-400'
                     }`}>
-                    {roundState === ROUND_STATES.PROCESSING ? 'ĐANG CHẤM ĐIỂM' :
+                    {roundState === ROUND_STATES.PROCESSING ? 'CHẤM ĐIỂM' :
                         roundState === ROUND_STATES.LISTENING ? 'ĐANG NGHE' :
                             roundState === ROUND_STATES.FINISHED ? 'HOÀN THÀNH' :
                                 'CHỜ BẮT ĐẦU'}
@@ -874,59 +888,59 @@ function App() {
 
             {/* Main Battle Area */}
             <div className="flex-1 flex flex-col">
-                <div className="bg-gray-900 rounded-lg p-8 flex-1 flex flex-col">
+                <div className="bg-gray-900 rounded-lg p-4 md:p-8 flex-1 flex flex-col">
 
                     {/* Battle Characters */}
-                    <div className="flex-1 grid grid-cols-2 gap-12 items-center">
+                    <div className="flex-1 grid grid-cols-2 gap-4 md:gap-12 items-center">
                         {/* Player */}
-                        <div className="flex flex-col items-center space-y-6">
-                            <h3 className="text-2xl font-mono text-cyan-400">NGƯỜI CHƠI</h3>
-                            <PlayerCharacter ref={playerRef} state={playerState} className="w-32 h-32" />
-                            <div className="flex space-x-2">
+                        <div className="flex flex-col items-center space-y-2 md:space-y-6">
+                            <h3 className="text-sm md:text-2xl font-mono text-cyan-400">NGƯỜI CHƠI</h3>
+                            <PlayerCharacter ref={playerRef} state={playerState} className="w-16 h-16 md:w-32 md:h-32" />
+                            <div className="flex space-x-1 md:space-x-2">
                                 {Array.from({ length: MAX_PLAYER_HP }, (_, i) => (
                                     <HeartIcon
                                         key={i}
                                         filled={i < playerHP}
-                                        className={`w-10 h-10 ${i < playerHP ? 'text-red-500' : 'text-gray-600'}`}
+                                        className={`w-4 h-4 md:w-10 md:h-10 ${i < playerHP ? 'text-red-500' : 'text-gray-600'}`}
                                     />
                                 ))}
                             </div>
-                            <div className="text-xl font-mono text-cyan-400">HP: {playerHP}/{MAX_PLAYER_HP}</div>
+                            <div className="text-xs md:text-xl font-mono text-cyan-400">HP: {playerHP}/{MAX_PLAYER_HP}</div>
                         </div>
 
                         {/* Enemy */}
-                        <div className="flex flex-col items-center space-y-6">
-                            <h3 className="text-2xl font-mono text-red-500">QUÁI VẬT</h3>
-                            <EnemyCharacter ref={enemyRef} state={enemyState} className="w-32 h-32" />
-                            <div className="flex space-x-2">
+                        <div className="flex flex-col items-center space-y-2 md:space-y-6">
+                            <h3 className="text-sm md:text-2xl font-mono text-red-500">QUÁI VẬT</h3>
+                            <EnemyCharacter ref={enemyRef} state={enemyState} className="w-16 h-16 md:w-32 md:h-32" />
+                            <div className="flex space-x-1 md:space-x-2">
                                 {Array.from({ length: getEnemyMaxHP(floor) }, (_, i) => (
                                     <HeartIcon
                                         key={i}
                                         filled={i < enemyHP}
-                                        className={`w-10 h-10 ${i < enemyHP ? 'text-red-500' : 'text-gray-600'}`}
+                                        className={`w-4 h-4 md:w-10 md:h-10 ${i < enemyHP ? 'text-red-500' : 'text-gray-600'}`}
                                     />
                                 ))}
                             </div>
-                            <div className="text-xl font-mono text-red-500">HP: {enemyHP}/{getEnemyMaxHP(floor)}</div>
+                            <div className="text-xs md:text-xl font-mono text-red-500">HP: {enemyHP}/{getEnemyMaxHP(floor)}</div>
                         </div>
                     </div>
 
                     {/* Current Word */}
                     {currentWord && (
-                        <div className="text-center bg-yellow-900 border border-yellow-500 rounded-lg p-6 my-8 mx-auto max-w-md">
-                            <h4 className="text-lg font-mono mb-2 text-yellow-400">TỪ CẦN PHÁT ÂM:</h4>
-                            <div className="text-5xl font-bold text-yellow-300 font-mono mb-2">
+                        <div className="text-center bg-yellow-900 border border-yellow-500 rounded-lg p-3 md:p-6 my-4 md:my-8 mx-auto max-w-xs md:max-w-md">
+                            <h4 className="text-sm md:text-lg font-mono mb-1 md:mb-2 text-yellow-400">TỪ CẦN PHÁT ÂM:</h4>
+                            <div className="text-2xl md:text-5xl font-bold text-yellow-300 font-mono mb-1 md:mb-2 break-all">
                                 {currentWord.word}
                             </div>
-                            <p className="text-sm text-yellow-600">
+                            <p className="text-xs md:text-sm text-yellow-600">
                                 Độ khó: {currentWord.diff} | Loại: {currentWord.type} | Âm tiết: {currentWord.syllables}
                             </p>
                         </div>
                     )}
 
                     {/* Timer/Status */}
-                    <div className="text-center mb-6">
-                        <div className={`text-6xl font-mono font-bold ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
+                    <div className="text-center mb-3 md:mb-6">
+                        <div className={`text-3xl md:text-6xl font-mono font-bold ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
                             roundState === ROUND_STATES.LISTENING && timer <= 5 ? 'text-red-500 animate-pulse' :
                                 roundState === ROUND_STATES.LISTENING ? 'text-cyan-400' :
                                     'text-gray-400'
@@ -936,7 +950,7 @@ function App() {
                                     roundState === ROUND_STATES.FINISHED ? 'XONG' :
                                         'SẴN SÀNG'}
                         </div>
-                        <p className="text-lg text-gray-400 mt-2">
+                        <p className="text-sm md:text-lg text-gray-400 mt-1 md:mt-2 px-2">
                             {roundState === ROUND_STATES.PROCESSING ? 'Đang xử lý âm thanh...' :
                                 roundState === ROUND_STATES.LISTENING ? 'Hãy nói từ bất cứ lúc nào' :
                                     roundState === ROUND_STATES.FINISHED ? 'Vòng chơi hoàn thành' :
@@ -945,17 +959,17 @@ function App() {
                     </div>
 
                     {/* Instructions */}
-                    <div className="text-center text-lg font-mono mb-6">
+                    <div className="text-center text-sm md:text-lg font-mono mb-3 md:mb-6 px-2">
                         {roundState === ROUND_STATES.WAITING && !hasStartedGame && (
                             <p className="text-green-400 animate-pulse">NHẤN [SPACE] ĐỂ BẮT ĐẦU VÒNG CHƠI</p>
                         )}
                         {roundState === ROUND_STATES.WAITING && hasStartedGame && (
-                            <p className="text-yellow-400">CHUẨN BỊ TỪ TIẾP THEO...</p>
+                            <p className="text-yellow-400">NHẤN [SPACE] ĐỂ BẮT ĐẦU VÒNG CHƠI</p>
                         )}
                         {roundState === ROUND_STATES.LISTENING && (
                             <div>
                                 <p className="text-blue-400">NÓI TỪ BẤT CỨ LÚC NÀO - HỆ THỐNG SẼ TỰ ĐỘNG CHẤM ĐIỂM</p>
-                                <p className="text-sm text-gray-400 mt-2">
+                                <p className="text-xs md:text-sm text-gray-400 mt-1 md:mt-2">
                                     VAD Status: {isListening ? '🎤 ĐANG NGHE' : '❌ KHÔNG HOẠT ĐỘNG'}
                                 </p>
                             </div>
@@ -977,17 +991,17 @@ function App() {
 
                     {/* Pronunciation Result */}
                     {showPronunciationResult && pronunciationResult && (
-                        <div className="text-center bg-purple-900 border border-purple-500 rounded-lg p-4 mb-6 mx-auto max-w-md">
-                            <h4 className="text-lg font-mono mb-2 text-purple-400">KẾT QUẢ PHÁT ÂM:</h4>
-                            <div className="text-3xl font-bold text-white mb-2">
+                        <div className="text-center bg-purple-900 border border-purple-500 rounded-lg p-3 md:p-4 mb-3 md:mb-6 mx-auto max-w-xs md:max-w-md">
+                            <h4 className="text-sm md:text-lg font-mono mb-1 md:mb-2 text-purple-400">KẾT QUẢ PHÁT ÂM:</h4>
+                            <div className="text-2xl md:text-3xl font-bold text-white mb-1 md:mb-2">
                                 {Math.round((pronunciationResult.total_score || 0) * 100)}%
                             </div>
-                            <p className="text-sm text-purple-300 mb-2">
+                            <p className="text-xs md:text-sm text-purple-300 mb-1 md:mb-2">
                                 {(pronunciationResult.total_score || 0) >= 0.85 ? '🎯 HOÀN HẢO! (2 damage)' :
                                     (pronunciationResult.total_score || 0) >= 0.60 ? '✅ THÀNH CÔNG! (1 damage)' :
                                         '❌ THẤT BẠI! (Player mất máu)'}
                             </p>
-                            <div className="text-xs text-gray-400">
+                            <div className="text-xs text-gray-400 hidden md:block">
                                 <p>Raw score: {pronunciationResult.total_score}</p>
                                 <p>Word: {pronunciationResult.text_refs}</p>
                                 <p>Expected: {currentWord?.word}</p>
@@ -999,6 +1013,36 @@ function App() {
 
             {/* Flying Spell Effect */}
             <FlyingSpell flyingSpell={flyingSpell} playerRef={playerRef} enemyRef={enemyRef} />
+
+            {/* Mobile Action Button */}
+            <div className="md:hidden fixed bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+                {roundState === ROUND_STATES.WAITING && !hasStartedGame && (
+                    <button
+                        onClick={handleSpacePress}
+                        className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-mono text-lg px-8 py-4 rounded-lg shadow-lg animate-pulse"
+                    >
+                        🚀 BẮT ĐẦU
+                    </button>
+                )}
+                {roundState === ROUND_STATES.WAITING && hasStartedGame && (
+                    <button
+                        onClick={handleSpacePress}
+                        className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-mono text-lg px-8 py-4 rounded-lg shadow-lg animate-pulse"
+                    >
+                        ▶️ TIẾP TỤC
+                    </button>
+                )}
+                {roundState === ROUND_STATES.LISTENING && (
+                    <div className="bg-blue-900 text-blue-200 font-mono text-sm px-6 py-3 rounded-lg shadow-lg border border-blue-500">
+                        🎤 ĐANG NGHE...
+                    </div>
+                )}
+                {roundState === ROUND_STATES.PROCESSING && (
+                    <div className="bg-yellow-900 text-yellow-200 font-mono text-sm px-6 py-3 rounded-lg shadow-lg border border-yellow-500 animate-pulse">
+                        ⏳ CHẤM ĐIỂM...
+                    </div>
+                )}
+            </div>
         </div>
     );
 
@@ -1024,7 +1068,15 @@ function App() {
                     </div>
                 </div>
             </div>
-            <p className="text-xl font-mono animate-pulse">NHẤN [SPACE] ĐỂ QUAY VỀ MENU</p>
+            <p className="text-xl font-mono animate-pulse hidden md:block">NHẤN [SPACE] ĐỂ QUAY VỀ MENU</p>
+
+            {/* Mobile Button for Game Over */}
+            <button
+                onClick={handleSpacePress}
+                className="md:hidden bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white font-mono text-lg px-8 py-4 rounded-lg shadow-lg animate-pulse mt-4"
+            >
+                🏠 QUAY VỀ MENU
+            </button>
         </div>
     );
 
