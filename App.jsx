@@ -22,18 +22,105 @@ const MAX_PLAYER_HP = 6;
 const MAX_ENEMY_HP = 6;
 
 const WORD_LIST = [
+    // Difficulty 1 - Very Easy (1 syllable, common words)
     { word: "CAT", diff: 1, syllables: 1, type: "n" },
+    { word: "DOG", diff: 1, syllables: 1, type: "n" },
+    { word: "BOOK", diff: 1, syllables: 1, type: "n" },
     { word: "DOOR", diff: 1, syllables: 1, type: "n" },
+    { word: "TREE", diff: 1, syllables: 1, type: "n" },
+    { word: "FISH", diff: 1, syllables: 1, type: "n" },
+    { word: "BIRD", diff: 1, syllables: 1, type: "n" },
+    { word: "HOUSE", diff: 1, syllables: 1, type: "n" },
+
+    // Difficulty 2 - Easy (2 syllables, simple words)
     { word: "APPLE", diff: 2, syllables: 2, type: "n" },
+    { word: "WATER", diff: 2, syllables: 2, type: "n" },
+    { word: "HAPPY", diff: 2, syllables: 2, type: "adj" },
+    { word: "MONEY", diff: 2, syllables: 2, type: "n" },
+    { word: "PAPER", diff: 2, syllables: 2, type: "n" },
+    { word: "FLOWER", diff: 2, syllables: 2, type: "n" },
+    { word: "WINDOW", diff: 2, syllables: 2, type: "n" },
+    { word: "MOTHER", diff: 2, syllables: 2, type: "n" },
+
+    // Difficulty 3 - Medium Easy (1-2 syllables, action words)
     { word: "RUN", diff: 3, syllables: 1, type: "v" },
+    { word: "JUMP", diff: 3, syllables: 1, type: "v" },
+    { word: "WALK", diff: 3, syllables: 1, type: "v" },
+    { word: "SLEEP", diff: 3, syllables: 1, type: "v" },
+    { word: "STUDY", diff: 3, syllables: 2, type: "v" },
+    { word: "LISTEN", diff: 3, syllables: 2, type: "v" },
+    { word: "TRAVEL", diff: 3, syllables: 2, type: "v" },
+    { word: "ANSWER", diff: 3, syllables: 2, type: "v" },
+
+    // Difficulty 4 - Medium (2-3 syllables, common but longer)
     { word: "TOWER", diff: 4, syllables: 2, type: "n" },
+    { word: "GARDEN", diff: 4, syllables: 2, type: "n" },
+    { word: "KITCHEN", diff: 4, syllables: 2, type: "n" },
+    { word: "PICTURE", diff: 4, syllables: 2, type: "n" },
+    { word: "COMPUTER", diff: 4, syllables: 3, type: "n" },
+    { word: "ELEPHANT", diff: 4, syllables: 3, type: "n" },
+    { word: "HOSPITAL", diff: 4, syllables: 3, type: "n" },
+    { word: "UMBRELLA", diff: 4, syllables: 3, type: "n" },
+
+    // Difficulty 5 - Medium Hard (2-3 syllables, less common)
     { word: "BEAM", diff: 5, syllables: 1, type: "n" },
     { word: "MAGIC", diff: 5, syllables: 2, type: "n" },
+    { word: "CASTLE", diff: 5, syllables: 2, type: "n" },
+    { word: "DRAGON", diff: 5, syllables: 2, type: "n" },
+    { word: "FOREST", diff: 5, syllables: 2, type: "n" },
+    { word: "CRYSTAL", diff: 5, syllables: 2, type: "n" },
+    { word: "ADVENTURE", diff: 5, syllables: 3, type: "n" },
+    { word: "MYSTERY", diff: 5, syllables: 3, type: "n" },
+
+    // Difficulty 6 - Hard (2-3 syllables, fantasy/complex)
     { word: "WIZARD", diff: 6, syllables: 2, type: "n" },
+    { word: "KNIGHT", diff: 6, syllables: 1, type: "n" },
+    { word: "POTION", diff: 6, syllables: 2, type: "n" },
+    { word: "TREASURE", diff: 6, syllables: 2, type: "n" },
+    { word: "KINGDOM", diff: 6, syllables: 2, type: "n" },
+    { word: "WARRIOR", diff: 6, syllables: 3, type: "n" },
+    { word: "ENCHANTED", diff: 6, syllables: 3, type: "adj" },
+    { word: "POWERFUL", diff: 6, syllables: 3, type: "adj" },
+
+    // Difficulty 7 - Very Hard (3+ syllables, complex words)
     { word: "PHANTOM", diff: 7, syllables: 2, type: "n" },
+    { word: "SORCERER", diff: 7, syllables: 3, type: "n" },
+    { word: "LEGENDARY", diff: 7, syllables: 4, type: "adj" },
+    { word: "DANGEROUS", diff: 7, syllables: 3, type: "adj" },
+    { word: "INVISIBLE", diff: 7, syllables: 4, type: "adj" },
+    { word: "MYSTERIOUS", diff: 7, syllables: 4, type: "adj" },
+    { word: "ADVENTURE", diff: 7, syllables: 3, type: "n" },
+    { word: "CHAMPION", diff: 7, syllables: 3, type: "n" },
+
+    // Difficulty 8 - Expert (3-4 syllables, advanced)
     { word: "BEAUTIFUL", diff: 8, syllables: 3, type: "adj" },
+    { word: "INCREDIBLE", diff: 8, syllables: 4, type: "adj" },
+    { word: "MAGNIFICENT", diff: 8, syllables: 4, type: "adj" },
+    { word: "SPECTACULAR", diff: 8, syllables: 4, type: "adj" },
+    { word: "FASCINATING", diff: 8, syllables: 4, type: "adj" },
+    { word: "IMAGINATION", diff: 8, syllables: 5, type: "n" },
+    { word: "CELEBRATION", diff: 8, syllables: 4, type: "n" },
+    { word: "TRANSFORMATION", diff: 8, syllables: 4, type: "n" },
+
+    // Difficulty 9 - Master (4-5 syllables, very advanced)
     { word: "EXTRAORDINARY", diff: 9, syllables: 5, type: "adj" },
+    { word: "UNBELIEVABLE", diff: 9, syllables: 5, type: "adj" },
+    { word: "REVOLUTIONARY", diff: 9, syllables: 6, type: "adj" },
+    { word: "INCOMPREHENSIBLE", diff: 9, syllables: 6, type: "adj" },
+    { word: "RESPONSIBILITY", diff: 9, syllables: 6, type: "n" },
+    { word: "COMMUNICATION", diff: 9, syllables: 5, type: "n" },
+    { word: "PRONUNCIATION", diff: 9, syllables: 5, type: "n" },
+    { word: "DETERMINATION", diff: 9, syllables: 5, type: "n" },
+
+    // Difficulty 10 - Legendary (5+ syllables, extremely challenging)
     { word: "COMPLICATED", diff: 10, syllables: 4, type: "adj" },
+    { word: "SOPHISTICATED", diff: 10, syllables: 5, type: "adj" },
+    { word: "INCOMPARABLE", diff: 10, syllables: 5, type: "adj" },
+    { word: "INDESCRIBABLE", diff: 10, syllables: 5, type: "adj" },
+    { word: "CHARACTERIZATION", diff: 10, syllables: 6, type: "n" },
+    { word: "INTERNATIONALIZATION", diff: 10, syllables: 8, type: "n" },
+    { word: "INCOMPREHENSIBILITY", diff: 10, syllables: 8, type: "n" },
+    { word: "ANTIDISESTABLISHMENTARIANISM", diff: 10, syllables: 12, type: "n" },
 ];
 
 // Game state enum
@@ -185,6 +272,9 @@ function App() {
     // UI states
     const [splashProgress, setSplashProgress] = useState(0);
     const [menuFade, setMenuFade] = useState(true);
+    const [hasStartedGame, setHasStartedGame] = useState(false);
+    const [shouldAutoStart, setShouldAutoStart] = useState(false);
+    const [recentlyUsedWords, setRecentlyUsedWords] = useState([]);
 
     // Refs
     const sounds = useRef(null);
@@ -223,11 +313,28 @@ function App() {
 
     // Update textToAnalyze when currentWord changes
     useEffect(() => {
-        if (currentWord?.word && pronunciationHook.config) {
-            pronunciationHook.config.textToAnalyze = currentWord.word;
+        if (currentWord?.word) {
             console.log('📝 Updated textToAnalyze to:', currentWord.word);
         }
     }, [currentWord?.word]);
+
+    // Auto-start round when currentWord changes and shouldAutoStart is true
+    useEffect(() => {
+        console.log('🔍 Auto-start useEffect triggered:', {
+            shouldAutoStart,
+            currentWord: currentWord?.word,
+            roundState,
+            willAutoStart: shouldAutoStart && currentWord?.word && roundState === ROUND_STATES.WAITING
+        });
+
+        if (shouldAutoStart && currentWord?.word && roundState === ROUND_STATES.WAITING) {
+            console.log('🚀 Auto-starting round due to currentWord change:', currentWord.word);
+            setShouldAutoStart(false);
+            setTimeout(() => {
+                startRound();
+            }, 100);
+        }
+    }, [currentWord?.word, shouldAutoStart, roundState]);
 
     const {
         isRecording,
@@ -343,6 +450,7 @@ function App() {
         setPronunciationResult(null);
         setShowPronunciationResult(false);
         isProcessingResultRef.current = false;
+        setHasStartedGame(true); // Mark that game has started
     };
 
     const resetGame = () => {
@@ -354,12 +462,32 @@ function App() {
         setCurrentWord(null);
         setRoundState(ROUND_STATES.WAITING);
         setTimer(ROUND_TIME);
+        setHasStartedGame(false); // Reset game started flag
+        setShouldAutoStart(false); // Reset auto-start flag
+        setRecentlyUsedWords([]); // Reset word history
     };
 
     const getRandomWord = (floor) => {
         const difficulty = getWordDifficulty(floor);
         const availableWords = WORD_LIST.filter(w => w.diff <= difficulty);
-        return availableWords[Math.floor(Math.random() * availableWords.length)];
+
+        // Filter out recently used words to avoid repetition
+        const unusedWords = availableWords.filter(w => !recentlyUsedWords.includes(w.word));
+
+        // If all words have been used recently, use all available words
+        const wordsToChooseFrom = unusedWords.length > 0 ? unusedWords : availableWords;
+
+        const selectedWord = wordsToChooseFrom[Math.floor(Math.random() * wordsToChooseFrom.length)];
+
+        // Add to recently used list and keep only last 10 words
+        setRecentlyUsedWords(prev => {
+            const updated = [selectedWord.word, ...prev.filter(w => w !== selectedWord.word)];
+            return updated.slice(0, Math.min(10, Math.floor(availableWords.length / 2))); // Keep max 50% of available words
+        });
+
+        console.log('🎲 Selected word:', selectedWord.word, 'from', wordsToChooseFrom.length, 'options (difficulty ≤', difficulty + ')');
+
+        return selectedWord;
     };
 
     const startRound = async () => {
@@ -617,6 +745,10 @@ function App() {
         setShowPronunciationResult(false);
 
         console.log('✅ Ready for next word:', newWord.word);
+
+        // Set flag to auto-start when currentWord updates
+        console.log('🏁 Setting shouldAutoStart = true for next word');
+        setShouldAutoStart(true);
     };
 
     const nextFloor = () => {
@@ -651,6 +783,12 @@ function App() {
         // Reset processing flag
         isProcessingResultRef.current = false;
         console.log('🔓 Reset processing flag to FALSE (nextFloor)');
+
+        console.log('✅ Ready for floor', newFloor, 'with word:', newWord.word);
+
+        // Set flag to auto-start when currentWord updates
+        console.log('🏁 Setting shouldAutoStart = true for next floor');
+        setShouldAutoStart(true);
     };
 
     const setCharacterState = (character, state, duration = 1000) => {
@@ -802,14 +940,17 @@ function App() {
                             {roundState === ROUND_STATES.PROCESSING ? 'Đang xử lý âm thanh...' :
                                 roundState === ROUND_STATES.LISTENING ? 'Hãy nói từ bất cứ lúc nào' :
                                     roundState === ROUND_STATES.FINISHED ? 'Vòng chơi hoàn thành' :
-                                        'Nhấn SPACE để bắt đầu'}
+                                        hasStartedGame ? 'Chuẩn bị từ tiếp theo...' : 'Nhấn SPACE để bắt đầu'}
                         </p>
                     </div>
 
                     {/* Instructions */}
                     <div className="text-center text-lg font-mono mb-6">
-                        {roundState === ROUND_STATES.WAITING && (
+                        {roundState === ROUND_STATES.WAITING && !hasStartedGame && (
                             <p className="text-green-400 animate-pulse">NHẤN [SPACE] ĐỂ BẮT ĐẦU VÒNG CHƠI</p>
+                        )}
+                        {roundState === ROUND_STATES.WAITING && hasStartedGame && (
+                            <p className="text-yellow-400">CHUẨN BỊ TỪ TIẾP THEO...</p>
                         )}
                         {roundState === ROUND_STATES.LISTENING && (
                             <div>
@@ -819,12 +960,18 @@ function App() {
                                 </p>
                             </div>
                         )}
+                        {roundState === ROUND_STATES.PROCESSING && (
+                            <p className="text-yellow-400 animate-pulse">ĐANG CHẤM ĐIỂM...</p>
+                        )}
+                        {roundState === ROUND_STATES.FINISHED && (
+                            <p className="text-green-400">HOÀN THÀNH - CHUYỂN TỪ TIẾP THEO...</p>
+                        )}
                     </div>
 
                     {/* Debug Controls */}
                     <div className="text-center mb-6">
                         <div className="flex justify-center space-x-4">
-                            
+
                         </div>
                     </div>
 
