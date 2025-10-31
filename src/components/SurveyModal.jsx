@@ -261,7 +261,7 @@ function SurveyModal({ isOpen, onClose, onPlayAgain, gameSessionId, currentGameI
                                     const fullHref = query ? `${baseHref}?${query}` : baseHref;
 
                                     return (
-                                    <a key={g.id} href={fullHref} target="_blank" rel="noreferrer"
+                                    <a key={g.id} href={fullHref}
                                        className="block w-full px-4 py-3 rounded-lg border border-cyan-700 bg-gray-800 hover:bg-gray-700 transition text-left font-mono">
                                         <div className="flex items-center space-x-3">
                                             {g.image ? (
