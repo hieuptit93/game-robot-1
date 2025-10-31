@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import * as Tone from 'tone';
 import { usePronunciationScoring } from './src/hooks/usePronunciationScoring.js';
+import SurveyModal from './src/components/SurveyModal.jsx';
+import { supabase } from './src/lib/supabaseClient.js';
 
 // Asset imports
 import userDefault from './src/assets/user/default.png';
@@ -275,6 +277,12 @@ function App() {
     const [hasStartedGame, setHasStartedGame] = useState(false);
     const [shouldAutoStart, setShouldAutoStart] = useState(false);
     const [recentlyUsedWords, setRecentlyUsedWords] = useState([]);
+    const [isSurveyOpen, setIsSurveyOpen] = useState(false);
+    const [urlParams, setUrlParams] = useState({});
+    const [userId, setUserId] = useState(null);
+    const [age, setAge] = useState(null);
+    const [gameId, setGameId] = useState(null);
+    const [gameSessionId, setGameSessionId] = useState(null);
 
     // Refs
     const sounds = useRef(null);
@@ -358,6 +366,148 @@ function App() {
         };
     }, []);
 
+    // Parse URL params once on mount
+    useEffect(() => {
+        try {
+            const params = new URLSearchParams(window.location.search);
+            const all = {};
+            params.forEach((value, key) => {
+                all[key] = value;
+            });
+            // Extract dedicated fields
+            const extractedUserId = all.user_id ?? all.userId ?? null;
+            const extractedAgeRaw = all.age ?? null;
+            const extractedGameId = all.game_id ?? all.gameId ?? null;
+
+            if (extractedUserId != null) setUserId(extractedUserId);
+            if (extractedGameId != null) setGameId(extractedGameId);
+            if (extractedAgeRaw != null) {
+                const n = Number(extractedAgeRaw);
+                setAge(Number.isFinite(n) ? n : extractedAgeRaw);
+            }
+
+            // Remove extracted keys from general params
+            const { user_id, userId, age: ageKey, game_id, gameId, ...rest } = all;
+            setUrlParams(rest);
+        } catch (e) {
+            // noop
+        }
+    }, []);
+
+    // Example: verify supabase client exists (no network call)
+    useEffect(() => {
+        if (supabase) {
+            // console.debug('Supabase client ready');
+        }
+    }, []);
+
+    // Create a game_session row only when game actually starts
+    useEffect(() => {
+        const createSession = async () => {
+            if (gameState !== GAME_STATES.INGAME) return;
+            if (!userId || gameSessionId) return;
+
+            const numericAge = Number.isFinite(Number(age)) ? Number(age) : null;
+            const numericGameId = Number.isFinite(Number(gameId)) ? Number(gameId) : null;
+
+            const payload = {
+                user_id: userId,
+                age: numericAge,
+                game_id: numericGameId,
+                start_time: new Date().toISOString(),
+                score: 0,
+                profile_data: urlParams || {}
+            };
+
+            try {
+                const { data, error } = await supabase
+                    .from('game_sessions')
+                    .insert(payload)
+                    .select('id')
+                    .single();
+
+                if (error) {
+                    console.error('Failed to create game session:', error);
+                    return;
+                }
+
+                setGameSessionId(data?.id || null);
+                console.log('Created game session:', data?.id);
+            } catch (err) {
+                console.error('Unexpected error creating game session:', err);
+            }
+        };
+
+        createSession();
+    }, [gameState, userId, age, gameId, urlParams, gameSessionId]);
+
+    // Open survey when game over ONLY if user hasn't completed survey for this game before
+    useEffect(() => {
+        const checkAndOpenSurvey = async () => {
+            if (gameState !== GAME_STATES.GAMEOVER) {
+                setIsSurveyOpen(false);
+                return;
+            }
+            try {
+                const numericGameId = Number.isFinite(Number(gameId)) ? Number(gameId) : null;
+
+                // If we know the user and game, check historical completion
+                if (userId && numericGameId != null) {
+                    const { data: history, error: historyError } = await supabase
+                        .from('game_sessions')
+                        .select('id')
+                        .eq('user_id', userId)
+                        .eq('game_id', numericGameId)
+                        .eq('survey_completed', true)
+                        .limit(1);
+
+                    if (!historyError && Array.isArray(history) && history.length > 0) {
+                        // User already completed survey for this game before → do not show
+                        setIsSurveyOpen(false);
+                        return;
+                    }
+                }
+
+                // Fallback to current session's completion flag if available
+                if (gameSessionId) {
+                    const { data, error } = await supabase
+                        .from('game_sessions')
+                        .select('survey_completed')
+                        .eq('id', gameSessionId)
+                        .single();
+                    if (!error) {
+                        const completed = Boolean(data?.survey_completed);
+                        setIsSurveyOpen(!completed);
+                        return;
+                    }
+                }
+
+                // Default: show if we couldn't verify completion
+                setIsSurveyOpen(true);
+            } catch (e) {
+                setIsSurveyOpen(true);
+            }
+        };
+
+        checkAndOpenSurvey();
+    }, [gameState, gameSessionId, userId, gameId]);
+
+    // When game ends, update end_time and final score on the session
+    useEffect(() => {
+        const markEndTime = async () => {
+            if (gameState !== GAME_STATES.GAMEOVER || !gameSessionId) return;
+            try {
+                await supabase
+                    .from('game_sessions')
+                    .update({ end_time: new Date().toISOString(), score })
+                    .eq('id', gameSessionId);
+            } catch (e) {
+                // noop
+            }
+        };
+        markEndTime();
+    }, [gameState, gameSessionId, score]);
+
     // Splash screen progress
     useEffect(() => {
         if (gameState === GAME_STATES.SPLASH) {
@@ -405,6 +555,10 @@ function App() {
     useEffect(() => {
         const handleKeyPress = async (event) => {
             if (event.code === 'Space') {
+                // If survey modal is open, let space behave normally (typing in inputs)
+                if (isSurveyOpen) {
+                    return;
+                }
                 event.preventDefault();
                 await handleSpacePress();
             }
@@ -412,7 +566,7 @@ function App() {
 
         window.addEventListener('keydown', handleKeyPress);
         return () => window.removeEventListener('keydown', handleKeyPress);
-    }, [gameState, roundState]);
+    }, [gameState, roundState, isSurveyOpen]);
 
     const handleSpacePress = async () => {
         sounds.current?.pop();
@@ -436,6 +590,8 @@ function App() {
     };
 
     const startGame = () => {
+        // start a fresh session
+        setGameSessionId(null);
         setGameState(GAME_STATES.INGAME);
         setFloor(1);
         setScore(0);
@@ -465,6 +621,15 @@ function App() {
         setHasStartedGame(false); // Reset game started flag
         setShouldAutoStart(false); // Reset auto-start flag
         setRecentlyUsedWords([]); // Reset word history
+    };
+
+    const handleCloseSurvey = () => {
+        setIsSurveyOpen(false);
+    };
+
+    const handlePlayAgain = () => {
+        setIsSurveyOpen(false);
+        startGame();
     };
 
     const getRandomWord = (floor) => {
@@ -823,6 +988,12 @@ function App() {
 
     const renderMenu = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
+            <button
+                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                className="fixed top-4 left-4 md:top-6 md:left-6 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
+            >
+                ← Thoát game
+            </button>
             <h1 className="text-4xl md:text-8xl font-bold mb-8 md:mb-16 font-mono">ECHO TOWER</h1>
             <p className={`text-xl md:text-2xl font-mono transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-30'} hidden md:block`}>
                 PRESS [SPACE] TO START
@@ -840,6 +1011,12 @@ function App() {
 
     const renderTutorial = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400 p-8">
+            <button
+                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                className="fixed top-4 left-4 md:top-6 md:left-6 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
+            >
+                ← Thoát game
+            </button>
             <h2 className="text-4xl font-bold mb-8 font-mono">CÁCH CHƠI</h2>
             <div className="max-w-3xl text-center space-y-2 md:space-y-4 text-sm md:text-xl px-4">
                 <p>🧙‍♂️ Bạn là một pháp sư leo lên Tháp Echo</p>
@@ -867,6 +1044,12 @@ function App() {
 
     const renderGame = () => (
         <div className="min-h-screen bg-black text-cyan-400 p-2 md:p-4 flex flex-col">
+            <button
+                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                className="fixed top-14 left-4 md:top-24 md:left-8 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
+            >
+                ← Thoát game
+            </button>
             {/* Top HUD */}
             <div className="flex justify-between items-center mb-4 md:mb-8">
                 <div className="flex items-center space-x-2 md:space-x-6">
@@ -1048,6 +1231,12 @@ function App() {
 
     const renderGameOver = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
+            <button
+                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                className="fixed top-4 left-4 md:top-6 md:left-6 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
+            >
+                ← Thoát game
+            </button>
             <h2 className="text-6xl font-bold mb-8 font-mono text-red-500">KẾT THÚC GAME</h2>
             <div className="text-center space-y-4 text-2xl font-mono mb-8">
                 <p>ĐIỂM CUỐI: <span className="text-yellow-400">{score}</span></p>
@@ -1077,6 +1266,17 @@ function App() {
             >
                 🏠 QUAY VỀ MENU
             </button>
+            {/* Survey Modal */}
+            <SurveyModal
+                isOpen={isSurveyOpen}
+                onClose={handleCloseSurvey}
+                onPlayAgain={handlePlayAgain}
+                gameSessionId={gameSessionId}
+                currentGameId={gameId}
+                userId={userId}
+                age={age}
+                urlParams={urlParams}
+            />
         </div>
     );
 
