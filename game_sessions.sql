@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS game_sessions (
   score INTEGER DEFAULT 0,
   comment TEXT,
   survey_completed BOOLEAN DEFAULT FALSE,
+  exited_via_button BOOLEAN DEFAULT FALSE,
   next_game_id INTEGER,
   profile_data JSONB,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

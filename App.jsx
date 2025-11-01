@@ -632,6 +632,22 @@ function App() {
         startGame();
     };
 
+    const handleExitGame = async () => {
+        // Update game_sessions to mark that user exited via button
+        if (gameSessionId) {
+            try {
+                await supabase
+                    .from('game_sessions')
+                    .update({ exited_via_button: true, end_time: new Date().toISOString() })
+                    .eq('id', gameSessionId);
+            } catch (e) {
+                console.error('Error updating exited_via_button:', e);
+            }
+        }
+        // Redirect after updating
+        window.location.href = 'https://robot-record-web.hacknao.edu.vn/games';
+    };
+
     const getRandomWord = (floor) => {
         const difficulty = getWordDifficulty(floor);
         const availableWords = WORD_LIST.filter(w => w.diff <= difficulty);
@@ -989,7 +1005,7 @@ function App() {
     const renderMenu = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
             <button
-                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                onClick={handleExitGame}
                 className="fixed top-4 left-4 md:top-6 md:left-6 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
             >
                 ← Thoát game
@@ -1012,7 +1028,7 @@ function App() {
     const renderTutorial = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400 p-8">
             <button
-                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                onClick={handleExitGame}
                 className="fixed top-4 left-4 md:top-6 md:left-6 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
             >
                 ← Thoát game
@@ -1045,7 +1061,7 @@ function App() {
     const renderGame = () => (
         <div className="min-h-screen bg-black text-cyan-400 p-2 md:p-4 flex flex-col">
             <button
-                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                onClick={handleExitGame}
                 className="fixed top-14 left-4 md:top-24 md:left-8 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
             >
                 ← Thoát game
@@ -1232,7 +1248,7 @@ function App() {
     const renderGameOver = () => (
         <div className="min-h-screen bg-black flex flex-col items-center justify-center text-cyan-400">
             <button
-                onClick={() => { window.location.href = 'https://robot-record-web.hacknao.edu.vn/games'; }}
+                onClick={handleExitGame}
                 className="fixed top-4 left-4 md:top-6 md:left-6 z-50 bg-gray-800/80 hover:bg-gray-700 text-white font-mono text-xs md:text-sm px-3 py-2 md:px-4 md:py-2 rounded border border-cyan-700 shadow"
             >
                 ← Thoát game
