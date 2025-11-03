@@ -187,9 +187,9 @@ function SurveyModal({ isOpen, onClose, onPlayAgain, gameSessionId, currentGameI
                     <div>
                         <p className="text-center text-lg md:text-xl font-mono text-yellow-300 mb-4">Bạn có thích trò chơi này không?</p>
                         <div className="flex justify-center space-x-3 md:space-x-6">
-                            <button onClick={() => handleNextFromStep1('happy')} className={`px-4 py-3 md:px-6 md:py-4 rounded-lg border ${likeAnswer === 'happy' ? 'border-cyan-400 bg-cyan-900/30' : 'border-cyan-700 bg-gray-800'} hover:bg-gray-700 transition font-mono text-2xl`} aria-label="Rất thích">😊</button>
-                            <button onClick={() => handleNextFromStep1('neutral')} className={`px-4 py-3 md:px-6 md:py-4 rounded-lg border ${likeAnswer === 'neutral' ? 'border-cyan-400 bg-cyan-900/30' : 'border-cyan-700 bg-gray-800'} hover:bg-gray-700 transition font-mono text-2xl`} aria-label="Bình thường">😐</button>
                             <button onClick={() => handleNextFromStep1('sad')} className={`px-4 py-3 md:px-6 md:py-4 rounded-lg border ${likeAnswer === 'sad' ? 'border-cyan-400 bg-cyan-900/30' : 'border-cyan-700 bg-gray-800'} hover:bg-gray-700 transition font-mono text-2xl`} aria-label="Không thích">😞</button>
+                            <button onClick={() => handleNextFromStep1('neutral')} className={`px-4 py-3 md:px-6 md:py-4 rounded-lg border ${likeAnswer === 'neutral' ? 'border-cyan-400 bg-cyan-900/30' : 'border-cyan-700 bg-gray-800'} hover:bg-gray-700 transition font-mono text-2xl`} aria-label="Bình thường">😐</button>
+                            <button onClick={() => handleNextFromStep1('happy')} className={`px-4 py-3 md:px-6 md:py-4 rounded-lg border ${likeAnswer === 'happy' ? 'border-cyan-400 bg-cyan-900/30' : 'border-cyan-700 bg-gray-800'} hover:bg-gray-700 transition font-mono text-2xl`} aria-label="Rất thích">😊</button>
                         </div>
                         <p className="text-center text-xs text-gray-400 mt-4">(Bắt buộc)</p>
                     </div>
