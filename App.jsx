@@ -3,6 +3,16 @@ import * as Tone from 'tone';
 import { usePronunciationScoring } from './src/hooks/usePronunciationScoring.js';
 import SurveyModal from './src/components/SurveyModal.jsx';
 import { supabase } from './src/lib/supabaseClient.js';
+import {
+    initDatadog,
+    setDatadogUser,
+    logGameEvent,
+    logGameStateChange,
+    logPronunciationEvent,
+    logVADEvent,
+    logError,
+    startPerformanceTimer
+} from './src/datadog.js';
 
 // Asset imports
 import userDefault from './src/assets/user/default.png';
@@ -33,6 +43,14 @@ const WORD_LIST = [
     { word: "FISH", diff: 1, syllables: 1, type: "n" },
     { word: "BIRD", diff: 1, syllables: 1, type: "n" },
     { word: "HOUSE", diff: 1, syllables: 1, type: "n" },
+    { word: "CAR", diff: 1, syllables: 1, type: "n" },
+    { word: "SUN", diff: 1, syllables: 1, type: "n" },
+    { word: "MOON", diff: 1, syllables: 1, type: "n" },
+    { word: "STAR", diff: 1, syllables: 1, type: "n" },
+    { word: "HAND", diff: 1, syllables: 1, type: "n" },
+    { word: "FOOT", diff: 1, syllables: 1, type: "n" },
+    { word: "HEAD", diff: 1, syllables: 1, type: "n" },
+    { word: "EYE", diff: 1, syllables: 1, type: "n" },
 
     // Difficulty 2 - Easy (2 syllables, simple words)
     { word: "APPLE", diff: 2, syllables: 2, type: "n" },
@@ -43,6 +61,14 @@ const WORD_LIST = [
     { word: "FLOWER", diff: 2, syllables: 2, type: "n" },
     { word: "WINDOW", diff: 2, syllables: 2, type: "n" },
     { word: "MOTHER", diff: 2, syllables: 2, type: "n" },
+    { word: "FATHER", diff: 2, syllables: 2, type: "n" },
+    { word: "SISTER", diff: 2, syllables: 2, type: "n" },
+    { word: "BROTHER", diff: 2, syllables: 2, type: "n" },
+    { word: "TEACHER", diff: 2, syllables: 2, type: "n" },
+    { word: "STUDENT", diff: 2, syllables: 2, type: "n" },
+    { word: "DOCTOR", diff: 2, syllables: 2, type: "n" },
+    { word: "KITCHEN", diff: 2, syllables: 2, type: "n" },
+    { word: "GARDEN", diff: 2, syllables: 2, type: "n" },
 
     // Difficulty 3 - Medium Easy (1-2 syllables, action words)
     { word: "RUN", diff: 3, syllables: 1, type: "v" },
@@ -53,76 +79,86 @@ const WORD_LIST = [
     { word: "LISTEN", diff: 3, syllables: 2, type: "v" },
     { word: "TRAVEL", diff: 3, syllables: 2, type: "v" },
     { word: "ANSWER", diff: 3, syllables: 2, type: "v" },
+    { word: "WRITE", diff: 3, syllables: 1, type: "v" },
+    { word: "READ", diff: 3, syllables: 1, type: "v" },
+    { word: "SPEAK", diff: 3, syllables: 1, type: "v" },
+    { word: "THINK", diff: 3, syllables: 1, type: "v" },
+    { word: "LEARN", diff: 3, syllables: 1, type: "v" },
+    { word: "TEACH", diff: 3, syllables: 1, type: "v" },
+    { word: "WORK", diff: 3, syllables: 1, type: "v" },
+    { word: "PLAY", diff: 3, syllables: 1, type: "v" },
 
     // Difficulty 4 - Medium (2-3 syllables, common but longer)
-    { word: "TOWER", diff: 4, syllables: 2, type: "n" },
-    { word: "GARDEN", diff: 4, syllables: 2, type: "n" },
-    { word: "KITCHEN", diff: 4, syllables: 2, type: "n" },
-    { word: "PICTURE", diff: 4, syllables: 2, type: "n" },
     { word: "COMPUTER", diff: 4, syllables: 3, type: "n" },
     { word: "ELEPHANT", diff: 4, syllables: 3, type: "n" },
     { word: "HOSPITAL", diff: 4, syllables: 3, type: "n" },
     { word: "UMBRELLA", diff: 4, syllables: 3, type: "n" },
+    { word: "TELEPHONE", diff: 4, syllables: 3, type: "n" },
+    { word: "TELEVISION", diff: 4, syllables: 4, type: "n" },
+    { word: "BICYCLE", diff: 4, syllables: 3, type: "n" },
+    { word: "AIRPLANE", diff: 4, syllables: 2, type: "n" },
+    { word: "PICTURE", diff: 4, syllables: 2, type: "n" },
+    { word: "SANDWICH", diff: 4, syllables: 2, type: "n" },
+    { word: "BIRTHDAY", diff: 4, syllables: 2, type: "n" },
+    { word: "HOMEWORK", diff: 4, syllables: 2, type: "n" },
+    { word: "WEEKEND", diff: 4, syllables: 2, type: "n" },
+    { word: "HOLIDAY", diff: 4, syllables: 3, type: "n" },
+    { word: "VACATION", diff: 4, syllables: 3, type: "n" },
+    { word: "RESTAURANT", diff: 4, syllables: 3, type: "n" },
 
     // Difficulty 5 - Medium Hard (2-3 syllables, less common)
-    { word: "BEAM", diff: 5, syllables: 1, type: "n" },
-    { word: "MAGIC", diff: 5, syllables: 2, type: "n" },
-    { word: "CASTLE", diff: 5, syllables: 2, type: "n" },
-    { word: "DRAGON", diff: 5, syllables: 2, type: "n" },
-    { word: "FOREST", diff: 5, syllables: 2, type: "n" },
-    { word: "CRYSTAL", diff: 5, syllables: 2, type: "n" },
     { word: "ADVENTURE", diff: 5, syllables: 3, type: "n" },
     { word: "MYSTERY", diff: 5, syllables: 3, type: "n" },
+    { word: "DRAGON", diff: 5, syllables: 2, type: "n" },
+    { word: "CASTLE", diff: 5, syllables: 2, type: "n" },
+    { word: "FOREST", diff: 5, syllables: 2, type: "n" },
+    { word: "CRYSTAL", diff: 5, syllables: 2, type: "n" },
+    { word: "MAGIC", diff: 5, syllables: 2, type: "n" },
+    { word: "WIZARD", diff: 5, syllables: 2, type: "n" },
+    { word: "KNIGHT", diff: 5, syllables: 1, type: "n" },
+    { word: "PRINCESS", diff: 5, syllables: 2, type: "n" },
+    { word: "KINGDOM", diff: 5, syllables: 2, type: "n" },
+    { word: "TREASURE", diff: 5, syllables: 2, type: "n" },
+    { word: "JOURNEY", diff: 5, syllables: 2, type: "n" },
+    { word: "MOUNTAIN", diff: 5, syllables: 2, type: "n" },
+    { word: "OCEAN", diff: 5, syllables: 2, type: "n" },
+    { word: "ISLAND", diff: 5, syllables: 2, type: "n" },
 
     // Difficulty 6 - Hard (2-3 syllables, fantasy/complex)
-    { word: "WIZARD", diff: 6, syllables: 2, type: "n" },
-    { word: "KNIGHT", diff: 6, syllables: 1, type: "n" },
-    { word: "POTION", diff: 6, syllables: 2, type: "n" },
-    { word: "TREASURE", diff: 6, syllables: 2, type: "n" },
-    { word: "KINGDOM", diff: 6, syllables: 2, type: "n" },
     { word: "WARRIOR", diff: 6, syllables: 3, type: "n" },
     { word: "ENCHANTED", diff: 6, syllables: 3, type: "adj" },
     { word: "POWERFUL", diff: 6, syllables: 3, type: "adj" },
+    { word: "DANGEROUS", diff: 6, syllables: 3, type: "adj" },
+    { word: "MYSTERIOUS", diff: 6, syllables: 4, type: "adj" },
+    { word: "INVISIBLE", diff: 6, syllables: 4, type: "adj" },
+    { word: "LEGENDARY", diff: 6, syllables: 4, type: "adj" },
+    { word: "SORCERER", diff: 6, syllables: 3, type: "n" },
+    { word: "PHANTOM", diff: 6, syllables: 2, type: "n" },
+    { word: "CHAMPION", diff: 6, syllables: 3, type: "n" },
+    { word: "GUARDIAN", diff: 6, syllables: 3, type: "n" },
+    { word: "DESTINY", diff: 6, syllables: 3, type: "n" },
+    { word: "PROPHECY", diff: 6, syllables: 3, type: "n" },
+    { word: "ANCIENT", diff: 6, syllables: 2, type: "adj" },
+    { word: "ETERNAL", diff: 6, syllables: 3, type: "adj" },
+    { word: "IMMORTAL", diff: 6, syllables: 3, type: "adj" },
 
     // Difficulty 7 - Very Hard (3+ syllables, complex words)
-    { word: "PHANTOM", diff: 7, syllables: 2, type: "n" },
-    { word: "SORCERER", diff: 7, syllables: 3, type: "n" },
-    { word: "LEGENDARY", diff: 7, syllables: 4, type: "adj" },
-    { word: "DANGEROUS", diff: 7, syllables: 3, type: "adj" },
-    { word: "INVISIBLE", diff: 7, syllables: 4, type: "adj" },
-    { word: "MYSTERIOUS", diff: 7, syllables: 4, type: "adj" },
-    { word: "ADVENTURE", diff: 7, syllables: 3, type: "n" },
-    { word: "CHAMPION", diff: 7, syllables: 3, type: "n" },
-
-    // Difficulty 8 - Expert (3-4 syllables, advanced)
-    { word: "BEAUTIFUL", diff: 8, syllables: 3, type: "adj" },
-    { word: "INCREDIBLE", diff: 8, syllables: 4, type: "adj" },
-    { word: "MAGNIFICENT", diff: 8, syllables: 4, type: "adj" },
-    { word: "SPECTACULAR", diff: 8, syllables: 4, type: "adj" },
-    { word: "FASCINATING", diff: 8, syllables: 4, type: "adj" },
-    { word: "IMAGINATION", diff: 8, syllables: 5, type: "n" },
-    { word: "CELEBRATION", diff: 8, syllables: 4, type: "n" },
-    { word: "TRANSFORMATION", diff: 8, syllables: 4, type: "n" },
-
-    // Difficulty 9 - Master (4-5 syllables, very advanced)
-    { word: "EXTRAORDINARY", diff: 9, syllables: 5, type: "adj" },
-    { word: "UNBELIEVABLE", diff: 9, syllables: 5, type: "adj" },
-    { word: "REVOLUTIONARY", diff: 9, syllables: 6, type: "adj" },
-    { word: "INCOMPREHENSIBLE", diff: 9, syllables: 6, type: "adj" },
-    { word: "RESPONSIBILITY", diff: 9, syllables: 6, type: "n" },
-    { word: "COMMUNICATION", diff: 9, syllables: 5, type: "n" },
-    { word: "PRONUNCIATION", diff: 9, syllables: 5, type: "n" },
-    { word: "DETERMINATION", diff: 9, syllables: 5, type: "n" },
-
-    // Difficulty 10 - Legendary (5+ syllables, extremely challenging)
-    { word: "COMPLICATED", diff: 10, syllables: 4, type: "adj" },
-    { word: "SOPHISTICATED", diff: 10, syllables: 5, type: "adj" },
-    { word: "INCOMPARABLE", diff: 10, syllables: 5, type: "adj" },
-    { word: "INDESCRIBABLE", diff: 10, syllables: 5, type: "adj" },
-    { word: "CHARACTERIZATION", diff: 10, syllables: 6, type: "n" },
-    { word: "INTERNATIONALIZATION", diff: 10, syllables: 8, type: "n" },
-    { word: "INCOMPREHENSIBILITY", diff: 10, syllables: 8, type: "n" },
-    { word: "ANTIDISESTABLISHMENTARIANISM", diff: 10, syllables: 12, type: "n" },
+    { word: "BEAUTIFUL", diff: 7, syllables: 3, type: "adj" },
+    { word: "INCREDIBLE", diff: 7, syllables: 4, type: "adj" },
+    { word: "MAGNIFICENT", diff: 7, syllables: 4, type: "adj" },
+    { word: "SPECTACULAR", diff: 7, syllables: 4, type: "adj" },
+    { word: "FASCINATING", diff: 7, syllables: 4, type: "adj" },
+    { word: "EXTRAORDINARY", diff: 7, syllables: 5, type: "adj" },
+    { word: "UNBELIEVABLE", diff: 7, syllables: 5, type: "adj" },
+    { word: "IMAGINATION", diff: 7, syllables: 5, type: "n" },
+    { word: "CELEBRATION", diff: 7, syllables: 4, type: "n" },
+    { word: "TRANSFORMATION", diff: 7, syllables: 4, type: "n" },
+    { word: "COMMUNICATION", diff: 7, syllables: 5, type: "n" },
+    { word: "PRONUNCIATION", diff: 7, syllables: 5, type: "n" },
+    { word: "DETERMINATION", diff: 7, syllables: 5, type: "n" },
+    { word: "ORGANIZATION", diff: 7, syllables: 5, type: "n" },
+    { word: "INFORMATION", diff: 7, syllables: 4, type: "n" },
+    { word: "EDUCATION", diff: 7, syllables: 4, type: "n" },
 ];
 
 // Game state enum
@@ -136,10 +172,10 @@ const GAME_STATES = {
 
 // Round states
 const ROUND_STATES = {
-    WAITING: 'waiting',      // Waiting for user to start speaking
-    LISTENING: 'listening',  // VAD is listening for speech
-    PROCESSING: 'processing', // Processing audio and scoring
-    FINISHED: 'finished'     // Round finished, showing results
+    WAITING: 'waiting',
+    LISTENING: 'listening',
+    PROCESSING: 'processing',
+    FINISHED: 'finished'
 };
 
 // Sound effects using Tone.js
@@ -307,6 +343,19 @@ function App() {
         onAnalysisComplete: (result) => {
             console.log('🎯 VAD auto-analysis completed:', result);
 
+            // Log VAD completion to Datadog
+            if (userId) {
+                logVADEvent('analysis_completed', {
+                    user_id: userId,
+                    word: currentWord?.word,
+                    has_result: !!result,
+                    total_score: result?.total_score,
+                    processing_time: Date.now() - (roundStartTime || Date.now()),
+                    floor: floor,
+                    score: score
+                });
+            }
+
             // Clear the round timeout since we got speech
             if (roundTimeoutRef.current) {
                 clearTimeout(roundTimeoutRef.current);
@@ -314,35 +363,10 @@ function App() {
                 console.log('✅ Cleared round timeout due to VAD detection');
             }
 
-            // Process result directly - handlePronunciationResult will set the flag
+            // Process result directly
             handlePronunciationResult(result, 'VAD_AUTO_ANALYSIS');
         }
     });
-
-    // Update textToAnalyze when currentWord changes
-    useEffect(() => {
-        if (currentWord?.word) {
-            console.log('📝 Updated textToAnalyze to:', currentWord.word);
-        }
-    }, [currentWord?.word]);
-
-    // Auto-start round when currentWord changes and shouldAutoStart is true
-    useEffect(() => {
-        console.log('🔍 Auto-start useEffect triggered:', {
-            shouldAutoStart,
-            currentWord: currentWord?.word,
-            roundState,
-            willAutoStart: shouldAutoStart && currentWord?.word && roundState === ROUND_STATES.WAITING
-        });
-
-        if (shouldAutoStart && currentWord?.word && roundState === ROUND_STATES.WAITING) {
-            console.log('🚀 Auto-starting round due to currentWord change:', currentWord.word);
-            setShouldAutoStart(false);
-            setTimeout(() => {
-                startRound();
-            }, 100);
-        }
-    }, [currentWord?.word, shouldAutoStart, roundState]);
 
     const {
         isRecording,
@@ -366,7 +390,7 @@ function App() {
         };
     }, []);
 
-    // Parse URL params once on mount
+    // Parse URL params once on mount and initialize Datadog
     useEffect(() => {
         try {
             const params = new URLSearchParams(window.location.search);
@@ -374,7 +398,7 @@ function App() {
             params.forEach((value, key) => {
                 all[key] = value;
             });
-            // Extract dedicated fields
+
             const extractedUserId = all.user_id ?? all.userId ?? null;
             const extractedAgeRaw = all.age ?? null;
             const extractedGameId = all.game_id ?? all.gameId ?? null;
@@ -386,20 +410,37 @@ function App() {
                 setAge(Number.isFinite(n) ? n : extractedAgeRaw);
             }
 
-            // Remove extracted keys from general params
-            const { user_id, userId, age: ageKey, game_id, gameId, ...rest } = all;
+            const { user_id, userId: userIdParam, age: ageKey, game_id, gameId: gameIdParam, ...rest } = all;
             setUrlParams(rest);
+
+            console.log('🐕 Initializing Datadog with user_id:', extractedUserId);
+            initDatadog(extractedUserId);
+
         } catch (e) {
-            // noop
+            console.log('🐕 Initializing Datadog without user context due to error:', e);
+            initDatadog();
         }
     }, []);
 
-    // Example: verify supabase client exists (no network call)
+    // Initialize Datadog logging after user_id is available
     useEffect(() => {
-        if (supabase) {
-            // console.debug('Supabase client ready');
+        if (userId) {
+            setDatadogUser(userId, {
+                age: age,
+                game_id: gameId
+            });
+
+            logGameEvent('app_initialized', {
+                user_id: userId,
+                age: age,
+                game_id: gameId,
+                timestamp: new Date().toISOString(),
+                user_agent: navigator.userAgent,
+                screen_resolution: `${window.screen.width}x${window.screen.height}`,
+                url_params: urlParams
+            });
         }
-    }, []);
+    }, [userId, age, gameId, urlParams]);
 
     // Create a game_session row only when game actually starts
     useEffect(() => {
@@ -428,6 +469,12 @@ function App() {
 
                 if (error) {
                     console.error('Failed to create game session:', error);
+                    if (userId) {
+                        logError(new Error('Failed to create game session'), {
+                            supabase_error: error,
+                            game_state: gameState
+                        });
+                    }
                     return;
                 }
 
@@ -435,78 +482,17 @@ function App() {
                 console.log('Created game session:', data?.id);
             } catch (err) {
                 console.error('Unexpected error creating game session:', err);
+                if (userId) {
+                    logError(err, {
+                        context: 'game_session_creation',
+                        game_state: gameState
+                    });
+                }
             }
         };
 
         createSession();
     }, [gameState, userId, age, gameId, urlParams, gameSessionId]);
-
-    // Open survey when game over ONLY if user hasn't completed survey for this game before
-    useEffect(() => {
-        const checkAndOpenSurvey = async () => {
-            if (gameState !== GAME_STATES.GAMEOVER) {
-                setIsSurveyOpen(false);
-                return;
-            }
-            try {
-                const numericGameId = Number.isFinite(Number(gameId)) ? Number(gameId) : null;
-
-                // If we know the user and game, check historical completion
-                if (userId && numericGameId != null) {
-                    const { data: history, error: historyError } = await supabase
-                        .from('game_sessions')
-                        .select('id')
-                        .eq('user_id', userId)
-                        .eq('game_id', numericGameId)
-                        .eq('survey_completed', true)
-                        .limit(1);
-
-                    if (!historyError && Array.isArray(history) && history.length > 0) {
-                        // User already completed survey for this game before → do not show
-                        setIsSurveyOpen(false);
-                        return;
-                    }
-                }
-
-                // Fallback to current session's completion flag if available
-                if (gameSessionId) {
-                    const { data, error } = await supabase
-                        .from('game_sessions')
-                        .select('survey_completed')
-                        .eq('id', gameSessionId)
-                        .single();
-                    if (!error) {
-                        const completed = Boolean(data?.survey_completed);
-                        setIsSurveyOpen(!completed);
-                        return;
-                    }
-                }
-
-                // Default: show if we couldn't verify completion
-                setIsSurveyOpen(true);
-            } catch (e) {
-                setIsSurveyOpen(true);
-            }
-        };
-
-        checkAndOpenSurvey();
-    }, [gameState, gameSessionId, userId, gameId]);
-
-    // When game ends, update end_time and final score on the session
-    useEffect(() => {
-        const markEndTime = async () => {
-            if (gameState !== GAME_STATES.GAMEOVER || !gameSessionId) return;
-            try {
-                await supabase
-                    .from('game_sessions')
-                    .update({ end_time: new Date().toISOString(), score })
-                    .eq('id', gameSessionId);
-            } catch (e) {
-                // noop
-            }
-        };
-        markEndTime();
-    }, [gameState, gameSessionId, score]);
 
     // Splash screen progress
     useEffect(() => {
@@ -516,6 +502,10 @@ function App() {
                     if (prev >= 100) {
                         clearInterval(interval);
                         setGameState(GAME_STATES.MENU);
+                        if (userId) {
+                            logGameStateChange(GAME_STATES.SPLASH, GAME_STATES.MENU);
+                            logGameEvent('splash_completed', { user_id: userId, duration_ms: Date.now() });
+                        }
                         return 100;
                     }
                     return prev + 2;
@@ -523,7 +513,7 @@ function App() {
             }, 50);
             return () => clearInterval(interval);
         }
-    }, [gameState]);
+    }, [gameState, userId]);
 
     // Menu fade animation
     useEffect(() => {
@@ -542,7 +532,6 @@ function App() {
                 setTimer(prev => prev - 1);
             }, 1000);
         } else if (gameState === GAME_STATES.INGAME && roundState === ROUND_STATES.LISTENING && timer === 0) {
-            // Time's up - process with no audio
             handleTimeUp();
         }
 
@@ -551,11 +540,21 @@ function App() {
         };
     }, [timer, gameState, roundState]);
 
+    // Auto-start round when currentWord changes and shouldAutoStart is true
+    useEffect(() => {
+        if (shouldAutoStart && currentWord?.word && roundState === ROUND_STATES.WAITING) {
+            console.log('🚀 Auto-starting round due to currentWord change:', currentWord.word);
+            setShouldAutoStart(false);
+            setTimeout(() => {
+                startRound();
+            }, 100);
+        }
+    }, [currentWord?.word, shouldAutoStart, roundState]);
+
     // Keyboard handler
     useEffect(() => {
         const handleKeyPress = async (event) => {
             if (event.code === 'Space') {
-                // If survey modal is open, let space behave normally (typing in inputs)
                 if (isSurveyOpen) {
                     return;
                 }
@@ -574,6 +573,7 @@ function App() {
         switch (gameState) {
             case GAME_STATES.MENU:
                 setGameState(GAME_STATES.TUTORIAL);
+                if (userId) logGameStateChange(GAME_STATES.MENU, GAME_STATES.TUTORIAL);
                 break;
             case GAME_STATES.TUTORIAL:
                 startGame();
@@ -589,10 +589,33 @@ function App() {
         }
     };
 
+    const getRandomWord = (floor) => {
+        const difficulty = getWordDifficulty(floor);
+        const availableWords = WORD_LIST.filter(w => w.diff <= difficulty);
+        const unusedWords = availableWords.filter(w => !recentlyUsedWords.includes(w.word));
+        const wordsToChooseFrom = unusedWords.length > 0 ? unusedWords : availableWords;
+        const selectedWord = wordsToChooseFrom[Math.floor(Math.random() * wordsToChooseFrom.length)];
+
+        setRecentlyUsedWords(prev => {
+            const updated = [selectedWord.word, ...prev.filter(w => w !== selectedWord.word)];
+            return updated.slice(0, Math.min(10, Math.floor(availableWords.length / 2)));
+        });
+
+        return selectedWord;
+    };
+
     const startGame = () => {
-        // start a fresh session
         setGameSessionId(null);
         setGameState(GAME_STATES.INGAME);
+        if (userId) {
+            logGameStateChange(GAME_STATES.TUTORIAL, GAME_STATES.INGAME, floor, score);
+            logGameEvent('game_started', {
+                user_id: userId,
+                age: age,
+                game_id: gameId,
+                starting_floor: floor
+            });
+        }
         setFloor(1);
         setScore(0);
         setPlayerHP(MAX_PLAYER_HP);
@@ -606,11 +629,19 @@ function App() {
         setPronunciationResult(null);
         setShowPronunciationResult(false);
         isProcessingResultRef.current = false;
-        setHasStartedGame(true); // Mark that game has started
+        setHasStartedGame(true);
     };
 
     const resetGame = () => {
         setGameState(GAME_STATES.MENU);
+        if (userId) {
+            logGameStateChange(GAME_STATES.GAMEOVER, GAME_STATES.MENU, floor, score);
+            logGameEvent('game_reset', {
+                user_id: userId,
+                final_floor: floor,
+                final_score: score
+            });
+        }
         setFloor(1);
         setScore(0);
         setPlayerHP(MAX_PLAYER_HP);
@@ -618,63 +649,14 @@ function App() {
         setCurrentWord(null);
         setRoundState(ROUND_STATES.WAITING);
         setTimer(ROUND_TIME);
-        setHasStartedGame(false); // Reset game started flag
-        setShouldAutoStart(false); // Reset auto-start flag
-        setRecentlyUsedWords([]); // Reset word history
-    };
-
-    const handleCloseSurvey = () => {
-        setIsSurveyOpen(false);
-    };
-
-    const handlePlayAgain = () => {
-        setIsSurveyOpen(false);
-        startGame();
-    };
-
-    const handleExitGame = async () => {
-        // Update game_sessions to mark that user exited via button
-        if (gameSessionId) {
-            try {
-                await supabase
-                    .from('game_sessions')
-                    .update({ exited_via_button: true, end_time: new Date().toISOString() })
-                    .eq('id', gameSessionId);
-            } catch (e) {
-                console.error('Error updating exited_via_button:', e);
-            }
-        }
-        // Redirect after updating
-        window.location.href = 'https://robot-record-web.hacknao.edu.vn/games';
-    };
-
-    const getRandomWord = (floor) => {
-        const difficulty = getWordDifficulty(floor);
-        const availableWords = WORD_LIST.filter(w => w.diff <= difficulty);
-
-        // Filter out recently used words to avoid repetition
-        const unusedWords = availableWords.filter(w => !recentlyUsedWords.includes(w.word));
-
-        // If all words have been used recently, use all available words
-        const wordsToChooseFrom = unusedWords.length > 0 ? unusedWords : availableWords;
-
-        const selectedWord = wordsToChooseFrom[Math.floor(Math.random() * wordsToChooseFrom.length)];
-
-        // Add to recently used list and keep only last 10 words
-        setRecentlyUsedWords(prev => {
-            const updated = [selectedWord.word, ...prev.filter(w => w !== selectedWord.word)];
-            return updated.slice(0, Math.min(10, Math.floor(availableWords.length / 2))); // Keep max 50% of available words
-        });
-
-        console.log('🎲 Selected word:', selectedWord.word, 'from', wordsToChooseFrom.length, 'options (difficulty ≤', difficulty + ')');
-
-        return selectedWord;
+        setHasStartedGame(false);
+        setShouldAutoStart(false);
+        setRecentlyUsedWords([]);
     };
 
     const startRound = async () => {
         console.log('🚀 Starting new round with word:', currentWord?.word);
 
-        // Clear any existing timeout first
         if (roundTimeoutRef.current) {
             clearTimeout(roundTimeoutRef.current);
             roundTimeoutRef.current = null;
@@ -684,16 +666,13 @@ function App() {
         setTimer(ROUND_TIME);
         setRoundStartTime(Date.now());
 
-        // Clear any previous results
         clearBlob();
 
-        // Start VAD listening with pronunciation scoring
         if (startListening) {
             console.log('🎤 Starting VAD listening with pronunciation scoring...');
             await startListening();
         }
 
-        // Set timeout for 10 seconds - if no speech detected, process anyway
         roundTimeoutRef.current = setTimeout(() => {
             console.log('⏰ 10 seconds timeout - processing without speech');
             if (roundTimeoutRef.current) {
@@ -704,36 +683,22 @@ function App() {
     };
 
     const handleTimeUp = async () => {
-        console.log('⏰ Time up - no speech detected', {
-            roundState,
-            isListening,
-            currentWord: currentWord?.word
-        });
+        console.log('⏰ Time up - no speech detected');
 
-        // Only process if we're still in listening state AND not already processing
         if (roundState !== ROUND_STATES.LISTENING || isProcessingResultRef.current) {
-            console.log('⚠️ Ignoring timeout - not in correct state:', {
-                roundState,
-                isProcessingResult: isProcessingResultRef.current
-            });
             return;
         }
 
-        // Stop VAD listening
         if (isListening && stopListening) {
-            console.log('🛑 Stopping VAD listening due to timeout...');
             await stopListening();
         }
 
-        // Double check we're still not processing (race condition protection)
         if (isProcessingResultRef.current) {
-            console.log('⚠️ Result processing started during timeout, aborting timeout handler');
             return;
         }
 
         setRoundState(ROUND_STATES.PROCESSING);
 
-        // Process with no audio (failed pronunciation)
         const failResult = {
             total_score: 0,
             text_refs: currentWord.word,
@@ -749,174 +714,135 @@ function App() {
         handlePronunciationResult(failResult, 'TIMEOUT_HANDLER');
     };
 
-
-
     const handlePronunciationResult = (result, source = 'unknown') => {
-        console.log('🎯 Handling pronunciation result:', {
-            source,
-            result,
-            totalScore: result.total_score,
-            textRefs: result.text_refs,
-            currentWord: currentWord?.word,
-            roundState,
-            isProcessingResult: isProcessingResultRef.current,
-            timestamp: new Date().toISOString()
-        });
+        console.log('🎯 Handling pronunciation result:', { source, result });
 
-        // Prevent multiple processing of results (synchronous check)
         if (isProcessingResultRef.current) {
             console.log('⚠️ Already processing a result, ignoring this one from:', source);
             return;
         }
 
-        // Only process if we're still in listening state
         if (roundState !== ROUND_STATES.LISTENING && roundState !== ROUND_STATES.PROCESSING) {
-            console.log('⚠️ Not in correct state for processing result:', roundState, 'from:', source);
+            console.log('⚠️ Not in correct state for processing result:', roundState);
             return;
         }
 
-        // Verify result matches current word
         if (result.text_refs && currentWord?.word &&
             result.text_refs.toLowerCase() !== currentWord.word.toLowerCase()) {
-            console.error('🚨 WORD MISMATCH! Ignoring result from:', source, {
-                expected: currentWord.word,
-                received: result.text_refs
-            });
+            console.error('🚨 WORD MISMATCH! Ignoring result from:', source);
+            if (userId) {
+                logError(new Error('Word mismatch in pronunciation result'), {
+                    source,
+                    expected: currentWord.word,
+                    received: result.text_refs,
+                    floor,
+                    score
+                });
+            }
             return;
         }
 
-        // Set processing flag to prevent duplicate processing (synchronous)
-        console.log('✅ Processing result from:', source, '- Setting processing flag');
         isProcessingResultRef.current = true;
         setRoundState(ROUND_STATES.PROCESSING);
-
         setPronunciationResult(result);
         setShowPronunciationResult(true);
 
         const accuracy = (result.total_score || 0) * 100;
+
+        if (userId) {
+            logPronunciationEvent(
+                currentWord.word,
+                result.total_score,
+                accuracy,
+                source === 'api' ? 'api' : 'fallback'
+            );
+        }
+
         let damage = 0;
         let baseScore = Math.floor(Math.random() * 4) + 5;
         let finalScore = 0;
 
-        console.log('📊 Scoring calculation:', {
-            totalScore: result.total_score,
-            accuracy: accuracy,
-            accuracyRounded: Math.round(accuracy)
-        });
-
         if (accuracy >= 85) {
-            // Perfect pronunciation (85% - 100%)
             damage = 2;
             finalScore = baseScore * 3;
-            console.log('🎯 PERFECT! Damage:', damage, 'Score:', finalScore);
             sounds.current?.perfect();
             setCharacterState('player', 'attack', 1500);
             launchSpell('player');
             setTimeout(() => setCharacterState('enemy', 'hurt', 1000), 950);
         } else if (accuracy >= 60) {
-            // Good pronunciation (60% - 84%)
             damage = 1;
             finalScore = baseScore;
-            console.log('✅ GOOD! Damage:', damage, 'Score:', finalScore);
             sounds.current?.success();
             setCharacterState('player', 'attack', 1000);
             launchSpell('player');
             setTimeout(() => setCharacterState('enemy', 'hurt', 800), 950);
         } else {
-            // Failed pronunciation (0% - 59%) - Monster attacks player
             damage = 0;
             finalScore = 0;
-            console.log('❌ FAILED! Accuracy:', accuracy, '% - Monster attacks player');
             sounds.current?.fail();
-
-            // Monster attack animation sequence
             setCharacterState('enemy', 'attack', 1000);
             launchSpell('enemy');
             setTimeout(() => {
                 setCharacterState('player', 'hurt', 1000);
                 setPlayerHP(prev => Math.max(0, prev - 1));
-            }, 950); // Player gets hurt when spell hits
+            }, 950);
         }
 
-        console.log('📊 Final damage calculation:', {
-            accuracy,
-            damage,
-            finalScore,
-            willContinue: true
-        });
-
-        // Apply damage and score
         if (damage > 0) {
-            console.log('⚔️ PLAYER ATTACKS! Damage to enemy:', damage);
             const newEnemyHP = Math.max(0, enemyHP - damage);
             setEnemyHP(newEnemyHP);
             setScore(prev => prev + finalScore);
 
-            console.log('🎯 Enemy HP:', enemyHP, '→', newEnemyHP);
-
             if (newEnemyHP === 0) {
-                // Enemy defeated
-                console.log('💀 Enemy defeated!');
                 setCharacterState('enemy', 'dead');
                 const victoryBonus = (getEnemyMaxHP(floor) * 10) + Math.ceil(floor * 0.1);
                 setScore(prev => prev + victoryBonus);
                 setTimeout(() => nextFloor(), 2000);
             } else {
-                // Continue to next word
-                console.log('➡️ Continue to next word');
                 setTimeout(() => nextWord(), 2000);
             }
         } else {
-            console.log('💔 PLAYER FAILED! Player takes damage. Current HP:', playerHP);
             if (playerHP <= 1) {
-                // Player dies
-                console.log('💀 Player dies! Game over in 2s...');
                 setCharacterState('player', 'dead');
                 setTimeout(() => {
-                    console.log('💀 Executing game over...');
                     setGameState(GAME_STATES.GAMEOVER);
+                    if (userId) {
+                        logGameStateChange(GAME_STATES.INGAME, GAME_STATES.GAMEOVER, floor, score);
+                        logGameEvent('game_over', {
+                            user_id: userId,
+                            final_floor: floor,
+                            final_score: score,
+                            cause: 'player_death'
+                        });
+                    }
                 }, 2000);
             } else {
-                // Continue to next word
-                console.log('➡️ Player survives, continue to next word in 2s...');
-                setTimeout(() => {
-                    console.log('🔄 Executing nextWord (failed case)...');
-                    nextWord();
-                }, 2000);
+                setTimeout(() => nextWord(), 2000);
             }
         }
 
         setRoundState(ROUND_STATES.FINISHED);
 
-        // Hide result after 3 seconds
         setTimeout(() => {
             setShowPronunciationResult(false);
             setPronunciationResult(null);
-            console.log('🧹 Hiding pronunciation result');
         }, 3000);
     };
 
     const nextWord = async () => {
         console.log('🔄 Moving to next word');
 
-        // Clean up any existing timeouts
         if (roundTimeoutRef.current) {
             clearTimeout(roundTimeoutRef.current);
             roundTimeoutRef.current = null;
         }
 
-        // Stop any active VAD listening
         if (isListening && stopListening) {
-            console.log('🛑 Stopping VAD for next word...');
             await stopListening();
         }
 
-        // Clear previous results
         clearBlob();
-
-        // Reset processing flag FIRST
         isProcessingResultRef.current = false;
-        console.log('🔓 Reset processing flag to FALSE (nextWord)');
 
         const newWord = getRandomWord(floor);
         setCurrentWord(newWord);
@@ -925,10 +851,6 @@ function App() {
         setPronunciationResult(null);
         setShowPronunciationResult(false);
 
-        console.log('✅ Ready for next word:', newWord.word);
-
-        // Set flag to auto-start when currentWord updates
-        console.log('🏁 Setting shouldAutoStart = true for next word');
         setShouldAutoStart(true);
     };
 
@@ -938,12 +860,21 @@ function App() {
         setFloor(newFloor);
         sounds.current?.levelUp();
 
-        // Reset character states
+        if (userId) {
+            logGameEvent('floor_completed', {
+                user_id: userId,
+                completed_floor: floor,
+                new_floor: newFloor,
+                current_score: score,
+                player_hp: playerHP,
+                time_taken: Date.now() - (roundStartTime || Date.now())
+            });
+        }
+
         setPlayerState('default');
         setEnemyState('default');
         setFlyingSpell(null);
 
-        // Heal on floors divisible by 5
         if (newFloor % 5 === 0) {
             if (playerHP < MAX_PLAYER_HP) {
                 setPlayerHP(prev => Math.min(MAX_PLAYER_HP, prev + 1));
@@ -960,15 +891,8 @@ function App() {
         setTimer(ROUND_TIME);
         setPronunciationResult(null);
         setShowPronunciationResult(false);
-
-        // Reset processing flag
         isProcessingResultRef.current = false;
-        console.log('🔓 Reset processing flag to FALSE (nextFloor)');
 
-        console.log('✅ Ready for floor', newFloor, 'with word:', newWord.word);
-
-        // Set flag to auto-start when currentWord updates
-        console.log('🏁 Setting shouldAutoStart = true for next floor');
         setShouldAutoStart(true);
     };
 
@@ -989,6 +913,29 @@ function App() {
     const launchSpell = (caster) => {
         setFlyingSpell({ type: caster, active: true });
         setTimeout(() => setFlyingSpell(null), 1000);
+    };
+
+    const handleCloseSurvey = () => {
+        setIsSurveyOpen(false);
+    };
+
+    const handlePlayAgain = () => {
+        setIsSurveyOpen(false);
+        startGame();
+    };
+
+    const handleExitGame = async () => {
+        if (gameSessionId) {
+            try {
+                await supabase
+                    .from('game_sessions')
+                    .update({ exited_via_button: true, end_time: new Date().toISOString() })
+                    .eq('id', gameSessionId);
+            } catch (e) {
+                console.error('Error updating exited_via_button:', e);
+            }
+        }
+        window.location.href = 'https://robot-record-web.hacknao.edu.vn/games';
     };
 
     // Render functions
@@ -1015,7 +962,6 @@ function App() {
                 PRESS [SPACE] TO START
             </p>
 
-            {/* Mobile Button for Menu */}
             <button
                 onClick={handleSpacePress}
                 className={`md:hidden bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-70'}`}
@@ -1047,7 +993,6 @@ function App() {
                 <p>❤️ Hồi 1 máu ở các tầng chia hết cho 5</p>
                 <p className="text-green-400 mt-8 hidden md:block">NHẤN [SPACE] ĐỂ BẮT ĐẦU HÀNH TRÌNH</p>
 
-                {/* Mobile Button for Tutorial */}
                 <button
                     onClick={handleSpacePress}
                     className="md:hidden bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg animate-pulse mt-8"
@@ -1066,14 +1011,13 @@ function App() {
             >
                 ← Thoát game
             </button>
-            {/* Top HUD */}
+
             <div className="flex justify-between items-center mb-4 md:mb-8">
                 <div className="flex items-center space-x-2 md:space-x-6">
                     <span className="text-sm md:text-2xl font-mono text-yellow-400">TẦNG: {floor}</span>
                     <span className="text-sm md:text-2xl font-mono text-green-400">ĐIỂM: {score}</span>
                 </div>
 
-                {/* Round Status in top right */}
                 <div className={`text-xs md:text-2xl font-mono ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
                     roundState === ROUND_STATES.LISTENING ? 'text-blue-400 animate-pulse' :
                         'text-gray-400'
@@ -1085,13 +1029,9 @@ function App() {
                 </div>
             </div>
 
-            {/* Main Battle Area */}
             <div className="flex-1 flex flex-col">
                 <div className="bg-gray-900 rounded-lg p-4 md:p-8 flex-1 flex flex-col">
-
-                    {/* Battle Characters */}
                     <div className="flex-1 grid grid-cols-2 gap-4 md:gap-12 items-center">
-                        {/* Player */}
                         <div className="flex flex-col items-center space-y-2 md:space-y-6">
                             <h3 className="text-sm md:text-2xl font-mono text-cyan-400">NGƯỜI CHƠI</h3>
                             <PlayerCharacter ref={playerRef} state={playerState} className="w-16 h-16 md:w-32 md:h-32" />
@@ -1107,7 +1047,6 @@ function App() {
                             <div className="text-xs md:text-xl font-mono text-cyan-400">HP: {playerHP}/{MAX_PLAYER_HP}</div>
                         </div>
 
-                        {/* Enemy */}
                         <div className="flex flex-col items-center space-y-2 md:space-y-6">
                             <h3 className="text-sm md:text-2xl font-mono text-red-500">QUÁI VẬT</h3>
                             <EnemyCharacter ref={enemyRef} state={enemyState} className="w-16 h-16 md:w-32 md:h-32" />
@@ -1124,7 +1063,6 @@ function App() {
                         </div>
                     </div>
 
-                    {/* Current Word */}
                     {currentWord && (
                         <div className="text-center bg-yellow-900 border border-yellow-500 rounded-lg p-3 md:p-6 my-4 md:my-8 mx-auto max-w-xs md:max-w-md">
                             <h4 className="text-sm md:text-lg font-mono mb-1 md:mb-2 text-yellow-400">TỪ CẦN PHÁT ÂM:</h4>
@@ -1137,7 +1075,6 @@ function App() {
                         </div>
                     )}
 
-                    {/* Timer/Status */}
                     <div className="text-center mb-3 md:mb-6">
                         <div className={`text-3xl md:text-6xl font-mono font-bold ${roundState === ROUND_STATES.PROCESSING ? 'text-yellow-400 animate-pulse' :
                             roundState === ROUND_STATES.LISTENING && timer <= 5 ? 'text-red-500 animate-pulse' :
@@ -1157,7 +1094,6 @@ function App() {
                         </p>
                     </div>
 
-                    {/* Instructions */}
                     <div className="text-center text-sm md:text-lg font-mono mb-3 md:mb-6 px-2">
                         {roundState === ROUND_STATES.WAITING && !hasStartedGame && (
                             <p className="text-green-400 animate-pulse">NHẤN [SPACE] ĐỂ BẮT ĐẦU VÒNG CHƠI</p>
@@ -1181,14 +1117,6 @@ function App() {
                         )}
                     </div>
 
-                    {/* Debug Controls */}
-                    <div className="text-center mb-6">
-                        <div className="flex justify-center space-x-4">
-
-                        </div>
-                    </div>
-
-                    {/* Pronunciation Result */}
                     {showPronunciationResult && pronunciationResult && (
                         <div className="text-center bg-purple-900 border border-purple-500 rounded-lg p-3 md:p-4 mb-3 md:mb-6 mx-auto max-w-xs md:max-w-md">
                             <h4 className="text-sm md:text-lg font-mono mb-1 md:mb-2 text-purple-400">KẾT QUẢ PHÁT ÂM:</h4>
@@ -1200,20 +1128,13 @@ function App() {
                                     (pronunciationResult.total_score || 0) >= 0.60 ? '✅ THÀNH CÔNG! (1 damage)' :
                                         '❌ THẤT BẠI! (Player mất máu)'}
                             </p>
-                            <div className="text-xs text-gray-400 hidden md:block">
-                                <p>Raw score: {pronunciationResult.total_score}</p>
-                                <p>Word: {pronunciationResult.text_refs}</p>
-                                <p>Expected: {currentWord?.word}</p>
-                            </div>
                         </div>
                     )}
                 </div>
             </div>
 
-            {/* Flying Spell Effect */}
             <FlyingSpell flyingSpell={flyingSpell} playerRef={playerRef} enemyRef={enemyRef} />
 
-            {/* Mobile Action Button */}
             <div className="md:hidden fixed bottom-4 left-1/2 transform -translate-x-1/2 z-30">
                 {roundState === ROUND_STATES.WAITING && !hasStartedGame && (
                     <button
@@ -1275,14 +1196,13 @@ function App() {
             </div>
             <p className="text-xl font-mono animate-pulse hidden md:block">NHẤN [SPACE] ĐỂ QUAY VỀ MENU</p>
 
-            {/* Mobile Button for Game Over */}
             <button
                 onClick={handleSpacePress}
                 className="md:hidden bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white font-mono text-lg px-8 py-4 rounded-lg shadow-lg animate-pulse mt-4"
             >
                 🏠 QUAY VỀ MENU
             </button>
-            {/* Survey Modal */}
+
             <SurveyModal
                 isOpen={isSurveyOpen}
                 onClose={handleCloseSurvey}
