@@ -392,53 +392,68 @@ function App() {
 
     // Parse URL params once on mount and initialize Datadog
     useEffect(() => {
-        try {
-            const params = new URLSearchParams(window.location.search);
-            const all = {};
-            params.forEach((value, key) => {
-                all[key] = value;
-            });
+        const initializeApp = async () => {
+            try {
+                const params = new URLSearchParams(window.location.search);
+                const all = {};
+                params.forEach((value, key) => {
+                    all[key] = value;
+                });
 
-            const extractedUserId = all.user_id ?? all.userId ?? null;
-            const extractedAgeRaw = all.age ?? null;
-            const extractedGameId = all.game_id ?? all.gameId ?? null;
+                const extractedUserId = all.user_id ?? all.userId ?? null;
+                const extractedAgeRaw = all.age ?? null;
+                const extractedGameId = all.game_id ?? all.gameId ?? null;
 
-            if (extractedUserId != null) setUserId(extractedUserId);
-            if (extractedGameId != null) setGameId(extractedGameId);
-            if (extractedAgeRaw != null) {
-                const n = Number(extractedAgeRaw);
-                setAge(Number.isFinite(n) ? n : extractedAgeRaw);
+                if (extractedUserId != null) setUserId(extractedUserId);
+                if (extractedGameId != null) setGameId(extractedGameId);
+                if (extractedAgeRaw != null) {
+                    const n = Number(extractedAgeRaw);
+                    setAge(Number.isFinite(n) ? n : extractedAgeRaw);
+                }
+
+                const { user_id, userId: userIdParam, age: ageKey, game_id, gameId: gameIdParam, ...rest } = all;
+                setUrlParams(rest);
+
+                console.log('🐕 Initializing Datadog with user_id:', extractedUserId);
+                
+                // Add delay to ensure DOM is ready
+                await new Promise(resolve => setTimeout(resolve, 100));
+                initDatadog(extractedUserId);
+
+            } catch (e) {
+                console.error('❌ App initialization error:', e);
+                try {
+                    initDatadog();
+                } catch (datadogError) {
+                    console.error('❌ Datadog initialization failed:', datadogError);
+                }
             }
+        };
 
-            const { user_id, userId: userIdParam, age: ageKey, game_id, gameId: gameIdParam, ...rest } = all;
-            setUrlParams(rest);
-
-            console.log('🐕 Initializing Datadog with user_id:', extractedUserId);
-            initDatadog(extractedUserId);
-
-        } catch (e) {
-            console.log('🐕 Initializing Datadog without user context due to error:', e);
-            initDatadog();
-        }
+        initializeApp();
     }, []);
 
     // Initialize Datadog logging after user_id is available
     useEffect(() => {
         if (userId) {
-            setDatadogUser(userId, {
-                age: age,
-                game_id: gameId
-            });
+            try {
+                setDatadogUser(userId, {
+                    age: age,
+                    game_id: gameId
+                });
 
-            logGameEvent('app_initialized', {
-                user_id: userId,
-                age: age,
-                game_id: gameId,
-                timestamp: new Date().toISOString(),
-                user_agent: navigator.userAgent,
-                screen_resolution: `${window.screen.width}x${window.screen.height}`,
-                url_params: urlParams
-            });
+                logGameEvent('app_initialized', {
+                    user_id: userId,
+                    age: age,
+                    game_id: gameId,
+                    timestamp: new Date().toISOString(),
+                    user_agent: navigator.userAgent,
+                    screen_resolution: `${window.screen.width}x${window.screen.height}`,
+                    url_params: urlParams
+                });
+            } catch (error) {
+                console.error('❌ Datadog logging failed:', error);
+            }
         }
     }, [userId, age, gameId, urlParams]);
 
@@ -496,33 +511,59 @@ function App() {
 
     // Splash screen progress
     useEffect(() => {
+        let interval = null;
+        
         if (gameState === GAME_STATES.SPLASH) {
-            const interval = setInterval(() => {
+            interval = setInterval(() => {
                 setSplashProgress(prev => {
                     if (prev >= 100) {
-                        clearInterval(interval);
-                        setGameState(GAME_STATES.MENU);
-                        if (userId) {
-                            logGameStateChange(GAME_STATES.SPLASH, GAME_STATES.MENU);
-                            logGameEvent('splash_completed', { user_id: userId, duration_ms: Date.now() });
+                        if (interval) {
+                            clearInterval(interval);
+                            interval = null;
                         }
+                        
+                        // Use setTimeout to avoid state update during render
+                        setTimeout(() => {
+                            setGameState(GAME_STATES.MENU);
+                            if (userId) {
+                                try {
+                                    logGameStateChange(GAME_STATES.SPLASH, GAME_STATES.MENU);
+                                    logGameEvent('splash_completed', { user_id: userId, duration_ms: Date.now() });
+                                } catch (error) {
+                                    console.error('Datadog logging error:', error);
+                                }
+                            }
+                        }, 100);
+                        
                         return 100;
                     }
                     return prev + 2;
                 });
             }, 50);
-            return () => clearInterval(interval);
         }
+        
+        return () => {
+            if (interval) {
+                clearInterval(interval);
+            }
+        };
     }, [gameState, userId]);
 
     // Menu fade animation
     useEffect(() => {
+        let interval = null;
+        
         if (gameState === GAME_STATES.MENU) {
-            const interval = setInterval(() => {
+            interval = setInterval(() => {
                 setMenuFade(prev => !prev);
             }, 1000);
-            return () => clearInterval(interval);
         }
+        
+        return () => {
+            if (interval) {
+                clearInterval(interval);
+            }
+        };
     }, [gameState]);
 
     // Timer countdown
@@ -988,11 +1029,10 @@ function App() {
                 <p>✅ Phát âm thành công (60-85%): 1 sát thương, điểm thường</p>
                 <p>❌ Phát âm thất bại (0-60%): Bạn mất 1 máu</p>
                 <p>❤️ Hồi 1 máu ở các tầng chia hết cho 5</p>
-                <p className="text-green-400 mt-8 hidden md:block">NHẤN [SPACE] ĐỂ BẮT ĐẦU HÀNH TRÌNH</p>
 
                 <button
                     onClick={handleSpacePress}
-                    className="md:hidden bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg animate-pulse mt-8"
+                    className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg animate-pulse mt-8"
                 >
                     ⚔️ BẮT ĐẦU HÀNH TRÌNH
                 </button>
@@ -1092,12 +1132,6 @@ function App() {
                     </div>
 
                     <div className="text-center text-sm md:text-lg font-mono mb-3 md:mb-6 px-2">
-                        {roundState === ROUND_STATES.WAITING && !hasStartedGame && (
-                            <p className="text-green-400 animate-pulse">NHẤN [SPACE] ĐỂ BẮT ĐẦU VÒNG CHƠI</p>
-                        )}
-                        {roundState === ROUND_STATES.WAITING && hasStartedGame && (
-                            <p className="text-yellow-400">NHẤN [SPACE] ĐỂ BẮT ĐẦU VÒNG CHƠI</p>
-                        )}
                         {roundState === ROUND_STATES.LISTENING && (
                             <div>
                                 <p className="text-blue-400">NÓI TỪ BẤT CỨ LÚC NÀO - HỆ THỐNG SẼ TỰ ĐỘNG CHẤM ĐIỂM</p>
@@ -1132,13 +1166,13 @@ function App() {
 
             <FlyingSpell flyingSpell={flyingSpell} playerRef={playerRef} enemyRef={enemyRef} />
 
-            <div className="md:hidden fixed bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+            <div className="fixed bottom-4 left-1/2 transform -translate-x-1/2 z-30">
                 {roundState === ROUND_STATES.WAITING && !hasStartedGame && (
                     <button
                         onClick={handleSpacePress}
                         className="bg-green-600 hover:bg-green-700 active:bg-green-800 text-white font-mono text-lg px-8 py-4 rounded-lg shadow-lg animate-pulse"
                     >
-                        🚀 BẮT ĐẦU
+                        BẮT ĐẦU
                     </button>
                 )}
                 {roundState === ROUND_STATES.WAITING && hasStartedGame && (
@@ -1146,7 +1180,7 @@ function App() {
                         onClick={handleSpacePress}
                         className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-mono text-lg px-8 py-4 rounded-lg shadow-lg animate-pulse"
                     >
-                        ▶️ TIẾP TỤC
+                        BẮT ĐẦU
                     </button>
                 )}
                 {roundState === ROUND_STATES.LISTENING && (
