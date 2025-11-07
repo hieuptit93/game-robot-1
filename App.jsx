@@ -958,13 +958,10 @@ function App() {
                 ← Thoát game
             </button>
             <h1 className="text-4xl md:text-8xl font-bold mb-8 md:mb-16 font-mono">ECHO TOWER</h1>
-            <p className={`text-xl md:text-2xl font-mono transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-30'} hidden md:block`}>
-                PRESS [SPACE] TO START
-            </p>
 
             <button
                 onClick={handleSpacePress}
-                className={`md:hidden bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg transition-opacity duration-500 ${menuFade ? 'opacity-100' : 'opacity-70'}`}
+                className={`bg-cyan-600 hover:bg-cyan-700 active:bg-cyan-800 text-white font-mono text-xl px-8 py-4 rounded-lg shadow-lg transition-opacity duration-500`}
             >
                 🚀 BẮT ĐẦU GAME
             </button>
